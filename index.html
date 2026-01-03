@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Chroma Loop: Touch Pro</title>
+    <title>Chroma Loop: Zip Edition</title>
     <style>
         :root {
             --bg: #ffffff;
@@ -18,15 +18,16 @@
             background: var(--bg); color: #1e293b;
             margin: 0; padding: 10px;
             display: flex; flex-direction: column; align-items: center;
-            /* Prevent pull-to-refresh on some mobile browsers */
             overscroll-behavior: none;
+            user-select: none;
+            -webkit-user-select: none;
         }
 
-        .header { text-align: center; margin-bottom: 10px; }
+        .header { text-align: center; margin-bottom: 10px; pointer-events: none; }
         h1 { margin: 0; font-size: 1.2rem; letter-spacing: -0.5px; }
         
         .game-wrapper {
-            display: flex; flex-direction: column; gap: 12px;
+            display: flex; flex-direction: column; gap: 10px;
             align-items: center; width: 100%; max-width: 500px;
         }
 
@@ -34,9 +35,8 @@
             position: relative;
             background: var(--surface);
             padding: 10px; border-radius: 12px;
-            /* Crucial for mobile swipe: prevent scroll/zoom on this element */
+            /* Essential for fluid drag */
             touch-action: none; 
-            user-select: none;
         }
 
         #grid {
@@ -65,12 +65,13 @@
             display: flex; justify-content: center; align-items: center;
             border-radius: 50%; z-index: 10;
             background-color: currentColor;
+            pointer-events: none;
         }
         
         .ball-anchor span { color: var(--surface); font-weight: 900; font-size: 14px; mix-blend-mode: screen; }
         .ball-anchor.collected { opacity: 0.15; transform: scale(0.6); }
 
-        .sidebar { width: 100%; display: flex; flex-direction: column; gap: 10px; }
+        .sidebar { width: 100%; display: flex; flex-direction: column; gap: 8px; }
         .card { background: white; padding: 12px; border-radius: 12px; border: 1px solid #e2e8f0; }
 
         button {
@@ -78,17 +79,14 @@
             background: var(--wall); color: white;
             font-weight: 800; cursor: pointer; text-transform: uppercase; font-size: 10px;
         }
-        button:hover { background: var(--accent); }
 
-        #lb-list { max-height: 150px; overflow-y: auto; scrollbar-width: thin; }
+        #lb-list { max-height: 120px; overflow-y: auto; scrollbar-width: thin; }
         .lb-item { display: grid; grid-template-columns: 25px 1fr auto; padding: 6px 0; border-bottom: 1px solid #f1f5f9; align-items: center; }
         .lb-rank { font-weight: 900; color: #cbd5e1; font-size: 0.75rem; }
-        .lb-name { font-weight: 800; font-size: 0.75rem; color: var(--wall); }
-        .lb-route { font-family: monospace; font-size: 0.7rem; color: var(--accent); font-weight: 900; }
         .lb-stats { text-align: right; font-size: 0.55rem; color: #94a3b8; font-weight: 700; }
 
-        .histo-container { display: flex; align-items: flex-end; gap: 2px; height: 40px; margin-top: 8px; padding-bottom: 5px; border-bottom: 1px solid #eee; }
-        .histo-bar { flex: 1; background: var(--accent); min-width: 4px; border-top-left-radius: 2px; border-top-right-radius: 2px; transition: height 0.3s; }
+        .histo-container { display: flex; align-items: flex-end; gap: 2px; height: 35px; margin-top: 8px; padding-bottom: 5px; border-bottom: 1px solid #eee; }
+        .histo-bar { flex: 1; background: var(--accent); min-width: 4px; border-top-left-radius: 1px; border-top-right-radius: 1px; }
 
         .modal-overlay {
             position: fixed; top: 0; left: 0; width: 100%; height: 100%;
@@ -96,12 +94,9 @@
             justify-content: center; align-items: center; z-index: 100;
         }
         .modal { background: white; padding: 25px; border-radius: 16px; width: 85%; max-width: 300px; text-align: center; }
-        .modal input { width: 100%; padding: 12px; margin: 10px 0; border: 1px solid #ddd; border-radius: 8px; box-sizing: border-box; font-family: inherit; }
+        .modal input { width: 100%; padding: 12px; margin: 10px 0; border: 1px solid #ddd; border-radius: 8px; box-sizing: border-box; }
 
-        .dpad { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; width: 150px; margin: 5px auto; }
-        .dbtn { height: 45px; background: #e2e8f0; color: var(--wall); font-weight: bold; border-radius: 8px; border:none; font-size: 1.2rem;}
-
-        @media (max-width: 450px) { :root { --cell: 26px; } }
+        @media (max-width: 450px) { :root { --cell: 27px; } }
     </style>
 </head>
 <body>
@@ -120,13 +115,6 @@
             <canvas id="path-canvas"></canvas>
         </div>
 
-        <div class="dpad">
-            <div></div><button class="dbtn" onclick="move(0, -1)">↑</button><div></div>
-            <button class="dbtn" onclick="move(-1, 0)">←</button>
-            <button class="dbtn" onclick="move(0, 1)">↓</button>
-            <button class="dbtn" onclick="move(1, 0)">→</button>
-        </div>
-
         <div class="sidebar">
             <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px;">
                 <button onclick="changeMaze(-1)" style="background:#f1f5f9; color:#64748b;">Prev</button>
@@ -134,23 +122,20 @@
             </div>
             
             <div class="card">
-                <div style="font-weight: 900; font-size: 0.6rem; color: #94a3b8; text-transform: uppercase; margin-bottom: 5px; border-bottom: 1px solid #eee; padding-bottom: 4px;">Elite Standings</div>
+                <div style="font-weight: 900; font-size: 0.6rem; color: #94a3b8; text-transform: uppercase; margin-bottom: 5px;">Elite Standings</div>
                 <div id="lb-list"></div>
             </div>
 
             <div class="card">
                 <div style="display: flex; justify-content: space-between; align-items: center;">
-                    <div style="font-weight: 900; font-size: 0.6rem; color: #94a3b8; text-transform: uppercase;">Uniqueness Analytics</div>
+                    <div style="font-weight: 900; font-size: 0.6rem; color: #94a3b8; text-transform: uppercase;">Uniqueness</div>
                     <button onclick="toggleHeatmap()" style="padding: 2px 6px; font-size: 7px; background: var(--accent);">Toggle Map</button>
                 </div>
-                <div id="similarity-score" style="font-size: 0.65rem; margin-top: 4px; color: var(--accent); font-weight: bold;">Solve to see heatmap...</div>
+                <div id="rarity-text" style="font-size: 0.65rem; margin-top: 4px; color: var(--accent); font-weight: bold;">Drag to solve...</div>
                 <div class="histo-container" id="histogram"></div>
             </div>
 
-            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px;">
-                <button onclick="toggleNumbers()" style="background:#f1f5f9; color:#64748b;">Toggle #</button>
-                <button onclick="resetMaze()" style="background:#ef4444;">Restart Loop</button>
-            </div>
+            <button onclick="resetMaze()" style="background:#ef4444;">Restart Loop</button>
         </div>
     </div>
 
@@ -168,13 +153,12 @@
     let CS = 36;
     const colors = ["#ef4444", "#3b82f6", "#10b981", "#f59e0b", "#8b5cf6", "#ec4899", "#06b6d4", "#14b8a6", "#6366f1"];
     
-    let history = JSON.parse(localStorage.getItem('chroma_v13_touch_history') || '[]');
+    let history = JSON.parse(localStorage.getItem('chroma_v13_zip_history') || '[]');
     let curIdx = history.length > 0 ? history.length - 1 : 0;
-    let showNums = true;
     
     let state = { 
         cells: [], balls: {}, player: {x:0, y:0}, collected: new Set(), path: [], gameOver: false,
-        startTime: null, duration: 0, timerInterval: null, showHeatmap: true
+        startTime: null, duration: 0, timerInterval: null, showHeatmap: true, isDragging: false
     };
 
     const pathCanvas = document.getElementById('path-canvas');
@@ -191,17 +175,10 @@
     }
 
     function init() {
-        const hash = window.location.hash.substring(1);
-        if(hash) {
-            try {
-                const sharedMaze = JSON.parse(atob(hash));
-                if(!history.find(h => h.id === sharedMaze.id)) { history.push(sharedMaze); curIdx = history.length - 1; }
-            } catch(e) {}
-        }
         if (!history[curIdx]) generate();
         load(curIdx);
         window.addEventListener('resize', updateScale);
-        setupTouchEvents(); // Mobile initialization
+        setupInteraction();
         updateScale();
     }
 
@@ -230,7 +207,7 @@
             balls[i] = {x: rx, y: ry};
         }
         history.push({cells, balls, id: history.length + 1});
-        localStorage.setItem('chroma_v13_touch_history', JSON.stringify(history));
+        localStorage.setItem('chroma_v13_zip_history', JSON.stringify(history));
     }
 
     function load(idx) {
@@ -243,7 +220,6 @@
         clearInterval(state.timerInterval);
         document.getElementById('m-id').innerText = "#" + d.id;
         document.getElementById('timer').innerText = "0.0s";
-        window.location.hash = btoa(JSON.stringify(d));
         renderGrid(); drawWalls(); drawPath(); updateLB(); updateAnalytics();
     }
 
@@ -267,7 +243,7 @@
         const grid = document.getElementById('grid');
         grid.innerHTML = '';
         const mId = history[curIdx].id;
-        const data = JSON.parse(localStorage.getItem('chroma_touch_lb_v1') || '{}')[mId] || [];
+        const data = JSON.parse(localStorage.getItem('chroma_zip_lb_v1') || '{}')[mId] || [];
         const heatMap = {}; let maxHeat = 1;
         if(state.gameOver && state.showHeatmap) {
             data.forEach(entry => { if(entry.fullPath) entry.fullPath.forEach(p => {
@@ -277,7 +253,9 @@
         }
         for(let y=0; y<S; y++) {
             for(let x=0; x<S; x++) {
-                const el = document.createElement('div'); el.className = 'cell';
+                const el = document.createElement('div'); 
+                el.className = 'cell';
+                el.dataset.x = x; el.dataset.y = y;
                 if(state.gameOver && state.showHeatmap && heatMap[`${x},${y}`]) {
                     const overlay = document.createElement('div'); overlay.className = 'heatmap-overlay';
                     overlay.style.backgroundColor = `rgba(79, 70, 229, ${heatMap[`${x},${y}`]/maxHeat})`;
@@ -287,7 +265,7 @@
                     if(p.x === x && p.y === y) {
                         const b = document.createElement('div');
                         b.id = `ball-${n}`; b.className = `ball-anchor ${state.collected.has(parseInt(n))?'collected':''}`;
-                        b.style.color = colors[n-1]; b.innerHTML = showNums ? `<span>${n}</span>` : '';
+                        b.style.color = colors[n-1]; b.innerHTML = `<span>${n}</span>`;
                         el.appendChild(b);
                     }
                 }
@@ -314,8 +292,16 @@
         pathCtx.fill();
     }
 
-    function move(dx, dy) {
+    // Move Logic (Unified)
+    function attemptMove(nx, ny) {
         if(state.gameOver) return;
+        const {x, y} = state.player;
+        const dx = nx - x, dy = ny - y;
+        if (Math.abs(dx) + Math.abs(dy) !== 1) return; // Must be adjacent
+
+        const w = state.cells[y][x].w;
+        if(dx === 1 && w.r || dx === -1 && w.l || dy === 1 && w.b || dy === -1 && w.t) return;
+        
         if(!state.startTime) {
             state.startTime = Date.now();
             state.timerInterval = setInterval(() => {
@@ -323,12 +309,8 @@
                 document.getElementById('timer').innerText = state.duration.toFixed(1) + "s";
             }, 100);
         }
-        const {x, y} = state.player;
-        const w = state.cells[y][x].w;
-        let nx = x + dx, ny = y + dy;
-        if(dx === 1 && w.r || dx === -1 && w.l || dy === 1 && w.b || dy === -1 && w.t) return;
-        if(nx < 0 || nx >= S || ny < 0 || ny >= S) return;
-        
+
+        // Retrace Logic
         if (state.path.length > 1) {
             const prev = state.path[state.path.length - 2];
             if (nx === prev.x && ny === prev.y) {
@@ -338,6 +320,7 @@
                 state.player = {x: nx, y: ny}; renderGrid(); drawPath(); return;
             }
         }
+        
         if(state.path.some(p => p.x === nx && p.y === ny)) {
             if(!(nx === state.balls[1].x && ny === state.balls[1].y && state.collected.size === 8)) return;
         }
@@ -361,23 +344,50 @@
         renderGrid(); drawPath();
     }
 
+    // ZIP DRAG INTERACTION
+    function setupInteraction() {
+        const zone = document.getElementById('touch-zone');
+        
+        const handleInteraction = (e) => {
+            const touch = e.touches ? e.touches[0] : e;
+            const target = document.elementFromPoint(touch.clientX, touch.clientY);
+            if (!target) return;
+            const cell = target.closest('.cell');
+            if (cell) {
+                const nx = parseInt(cell.dataset.x);
+                const ny = parseInt(cell.dataset.y);
+                if (nx !== state.player.x || ny !== state.player.y) {
+                    attemptMove(nx, ny);
+                }
+            }
+        };
+
+        zone.addEventListener('mousedown', e => { state.isDragging = true; handleInteraction(e); });
+        window.addEventListener('mousemove', e => { if(state.isDragging) handleInteraction(e); });
+        window.addEventListener('mouseup', () => state.isDragging = false);
+
+        zone.addEventListener('touchstart', e => { state.isDragging = true; handleInteraction(e); }, {passive: false});
+        zone.addEventListener('touchmove', e => { if(state.isDragging) handleInteraction(e); }, {passive: false});
+        zone.addEventListener('touchend', () => state.isDragging = false);
+    }
+
     function saveScore() {
         const name = (document.getElementById('p-name').value || "ANON").toUpperCase();
         const mId = history[curIdx].id;
         const seq = [...state.collected].join('').substring(0, 9);
-        let lbs = JSON.parse(localStorage.getItem('chroma_touch_lb_v1') || '{}');
+        let lbs = JSON.parse(localStorage.getItem('chroma_zip_lb_v1') || '{}');
         if(!lbs[mId]) lbs[mId] = [];
         lbs[mId].push({ name, seq, length: state.path.length, time: state.duration, fullPath: state.path.map(p => ({x: p.x, y: p.y})) });
-        localStorage.setItem('chroma_touch_lb_v1', JSON.stringify(lbs));
+        localStorage.setItem('chroma_zip_lb_v1', JSON.stringify(lbs));
         document.getElementById('win-modal').style.display = 'none';
         updateLB(); updateAnalytics(); renderGrid();
     }
 
     function updateLB() {
         const mId = history[curIdx].id;
-        const data = JSON.parse(localStorage.getItem('chroma_touch_lb_v1') || '{}')[mId] || [];
+        const data = JSON.parse(localStorage.getItem('chroma_zip_lb_v1') || '{}')[mId] || [];
         const list = document.getElementById('lb-list');
-        list.innerHTML = data.length ? '' : '<div style="color:#94a3b8; font-size:0.6rem; text-align:center; padding:10px;">MAZE UNDISCOVERED.</div>';
+        list.innerHTML = data.length ? '' : '<div style="color:#94a3b8; font-size:0.6rem; text-align:center; padding:10px;">EMPTY...</div>';
         const group = {};
         data.forEach(e => {
             if(!group[e.seq]) group[e.seq] = { freq: 0, minLen: Infinity, minTime: Infinity, bestUser: "" };
@@ -395,51 +405,26 @@
             list.innerHTML += `<div class="lb-item">
                 <div class="lb-rank">${i+1}</div>
                 <div><div class="lb-name">${stats.bestUser}</div><div class="lb-route">${seq}</div></div>
-                <div class="lb-stats">${stats.freq} USERS<br>${stats.minLen} STEPS<br>${stats.minTime.toFixed(1)}s</div>
+                <div class="lb-stats">${stats.freq} FOUND<br>${stats.minLen} STEPS</div>
             </div>`;
         });
     }
 
     function updateAnalytics() {
         const mId = history[curIdx].id;
-        const data = JSON.parse(localStorage.getItem('chroma_touch_lb_v1') || '{}')[mId] || [];
+        const data = JSON.parse(localStorage.getItem('chroma_zip_lb_v1') || '{}')[mId] || [];
         const histo = document.getElementById('histogram'); histo.innerHTML = '';
         if(data.length === 0) return;
-        const seqFreq = {}; const seqToUser = {};
-        data.forEach(e => {
-            seqFreq[e.seq] = (seqFreq[e.seq] || 0) + 1;
-            if(!seqToUser[e.seq]) seqToUser[e.seq] = e.name;
-        });
+        const seqFreq = {}; data.forEach(e => seqFreq[e.seq] = (seqFreq[e.seq] || 0) + 1);
         const sortedEntries = Object.entries(seqFreq).sort((a,b) => b[1]-a[1]);
         const maxFreq = Math.max(...Object.values(seqFreq));
         sortedEntries.forEach(([seq, f]) => {
             const bar = document.createElement('div'); bar.className = 'histo-bar';
-            bar.style.height = `${(f / maxFreq) * 100}%`;
-            bar.title = `${seqToUser[seq]} (${seq})`; histo.appendChild(bar);
+            bar.style.height = `${(f / maxFreq) * 100}%`; histo.appendChild(bar);
         });
         const playerSeq = [...state.collected].join('').substring(0, 9);
-        const playerFreq = seqFreq[playerSeq] || 0;
-        const rarity = playerFreq ? (1 - (playerFreq / data.length)) * 100 : 100;
-        document.getElementById('similarity-score').innerText = state.gameOver ? `Path Uniqueness: ${rarity.toFixed(1)}%` : `Solve to see heatmap...`;
-    }
-
-    // SWIPE DETECTION LOGIC
-    function setupTouchEvents() {
-        let touchStartX = 0, touchStartY = 0;
-        const zone = document.getElementById('touch-zone');
-        zone.addEventListener('touchstart', e => {
-            touchStartX = e.changedTouches[0].screenX;
-            touchStartY = e.changedTouches[0].screenY;
-        }, false);
-        zone.addEventListener('touchend', e => {
-            const dx = e.changedTouches[0].screenX - touchStartX;
-            const dy = e.changedTouches[0].screenY - touchStartY;
-            const absX = Math.abs(dx), absY = Math.abs(dy);
-            if (Math.max(absX, absY) > 20) { // Threshold for swipe
-                if (absX > absY) dx > 0 ? move(1, 0) : move(-1, 0);
-                else dy > 0 ? move(0, 1) : move(0, -1);
-            }
-        }, false);
+        const rarity = seqFreq[playerSeq] ? (1 - (seqFreq[playerSeq] / data.length)) * 100 : 100;
+        document.getElementById('rarity-text').innerText = state.gameOver ? `Rarity: ${rarity.toFixed(1)}%` : `Drawing Loop...`;
     }
 
     function toggleHeatmap() { state.showHeatmap = !state.showHeatmap; renderGrid(); }
@@ -448,11 +433,6 @@
     function toggleNumbers() { showNums = !showNums; renderGrid(); }
     function showWin() { document.getElementById('win-modal').style.display = 'flex'; document.getElementById('final-stats').innerText = `${state.path.length - 1} Steps | ${state.duration.toFixed(2)}s`; }
     
-    window.addEventListener('keydown', (e) => {
-        if(['ArrowUp','ArrowDown','ArrowLeft','ArrowRight'].includes(e.key)) e.preventDefault();
-        if(e.key === 'ArrowUp') move(0, -1); if(e.key === 'ArrowDown') move(0, 1);
-        if(e.key === 'ArrowLeft') move(-1, 0); if(e.key === 'ArrowRight') move(1, 0);
-    });
     init();
 </script>
 </body>
