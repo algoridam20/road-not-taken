@@ -1,0 +1,463 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Chroma Loop: Analytics Elite</title>
+    <style>
+        :root {
+            --bg: #ffffff;
+            --surface: #f8fafc;
+            --wall: #0f172a;
+            --accent: #4f46e5;
+            --cell: 36px;
+        }
+
+        body {
+            font-family: 'Inter', system-ui, sans-serif;
+            background: var(--bg); color: #1e293b;
+            margin: 0; padding: 20px;
+            display: flex; flex-direction: column; align-items: center;
+            touch-action: manipulation;
+        }
+
+        .header { text-align: center; margin-bottom: 20px; }
+        
+        .game-wrapper {
+            display: flex; flex-direction: column; gap: 15px;
+            align-items: center; width: 100%; max-width: 520px;
+        }
+
+        .grid-container {
+            position: relative;
+            background: var(--surface);
+            padding: 10px; border-radius: 12px;
+        }
+
+        #grid {
+            display: grid;
+            grid-template-columns: repeat(13, var(--cell));
+            grid-template-rows: repeat(13, var(--cell));
+        }
+
+        .cell { 
+            width: var(--cell); height: var(--cell); 
+            display: flex; justify-content: center; align-items: center; 
+            position: relative;
+        }
+
+        .heatmap-overlay {
+            position: absolute; width: 100%; height: 100%;
+            pointer-events: none; opacity: 0.5; z-index: 1;
+        }
+
+        canvas { position: absolute; top: 10px; left: 10px; pointer-events: none; }
+        #wall-canvas { z-index: 4; }
+        #path-canvas { z-index: 5; }
+
+        .ball-anchor {
+            width: 28px; height: 28px;
+            display: flex; justify-content: center; align-items: center;
+            border-radius: 50%; z-index: 10;
+            background-color: currentColor;
+        }
+        
+        .ball-anchor span { color: var(--surface); font-weight: 900; font-size: 15px; mix-blend-mode: screen; }
+        .ball-anchor.collected { opacity: 0.15; transform: scale(0.6); }
+
+        .sidebar { width: 100%; display: flex; flex-direction: column; gap: 10px; }
+        .card { background: white; padding: 15px; border-radius: 12px; border: 1px solid #e2e8f0; }
+
+        button {
+            padding: 10px; border: none; border-radius: 8px;
+            background: var(--wall); color: white;
+            font-weight: 800; cursor: pointer; text-transform: uppercase; font-size: 10px;
+        }
+        button:hover { background: var(--accent); }
+
+        #lb-list { max-height: 180px; overflow-y: auto; scrollbar-width: thin; }
+        .lb-item { display: grid; grid-template-columns: 30px 1fr auto; padding: 8px 0; border-bottom: 1px solid #f1f5f9; align-items: center; }
+        .lb-rank { font-weight: 900; color: #cbd5e1; font-size: 0.8rem; }
+        .lb-name { font-weight: 800; font-size: 0.8rem; color: var(--wall); }
+        .lb-route { font-family: monospace; font-size: 0.75rem; color: var(--accent); font-weight: 900; }
+        .lb-stats { text-align: right; font-size: 0.6rem; color: #94a3b8; font-weight: 700; }
+
+        .histo-container { display: flex; align-items: flex-end; gap: 2px; height: 50px; margin-top: 10px; padding-bottom: 5px; border-bottom: 1px solid #eee; }
+        .histo-bar { flex: 1; background: var(--accent); min-width: 6px; border-top-left-radius: 2px; border-top-right-radius: 2px; transition: height 0.3s; cursor: help; }
+        .histo-bar:hover { background: #10b981; }
+
+        .modal-overlay {
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(15, 23, 42, 0.9); display: none;
+            justify-content: center; align-items: center; z-index: 100;
+        }
+        .modal { background: white; padding: 25px; border-radius: 16px; width: 300px; text-align: center; }
+
+        .dpad { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; width: 150px; margin: 10px auto; }
+        .dbtn { height: 48px; background: #e2e8f0; color: var(--wall); font-weight: bold; border-radius: 8px; border:none; font-size: 1.2rem;}
+
+        @media (max-width: 450px) { :root { --cell: 28px; } .grid-container { padding: 10px; } canvas { top: 10px; left: 10px; } }
+    </style>
+</head>
+<body>
+
+    <div class="header">
+        <h1>CHROMA LOOP #<span id="m-id">1</span></h1>
+        <div style="font-size: 0.65rem; font-weight: 900; color: #94a3b8; margin-top: 5px;">
+            <span id="timer">0.0s</span> | STEPS: <span id="step-count">0</span> | NODES: <span id="p-count">0</span>/9
+        </div>
+    </div>
+
+    <div class="game-wrapper">
+        <div class="grid-container">
+            <div id="grid"></div>
+            <canvas id="wall-canvas"></canvas>
+            <canvas id="path-canvas"></canvas>
+        </div>
+
+        <div class="dpad">
+            <div></div><button class="dbtn" onclick="move(0, -1)">↑</button><div></div>
+            <button class="dbtn" onclick="move(-1, 0)">←</button>
+            <button class="dbtn" onclick="move(0, 1)">↓</button>
+            <button class="dbtn" onclick="move(1, 0)">→</button>
+        </div>
+
+        <div class="sidebar">
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px;">
+                <button onclick="changeMaze(-1)" style="background:#f1f5f9; color:#64748b; border:1px solid #e2e8f0;">Prev</button>
+                <button onclick="changeMaze(1)" style="background:#10b981;">Next Maze</button>
+            </div>
+            
+            <div class="card">
+                <div style="font-weight: 900; font-size: 0.65rem; color: #94a3b8; text-transform: uppercase; margin-bottom: 5px; border-bottom: 1px solid #eee; padding-bottom: 4px;">Elite Standings</div>
+                <div id="lb-list"></div>
+            </div>
+
+            <div class="card" id="analytics-widget">
+                <div style="display: flex; justify-content: space-between; align-items: center;">
+                    <div style="font-weight: 900; font-size: 0.65rem; color: #94a3b8; text-transform: uppercase;">Uniqueness Analytics</div>
+                    <button onclick="toggleHeatmap()" style="padding: 4px 8px; font-size: 8px; background: var(--accent);">Toggle Map</button>
+                </div>
+                <div id="similarity-score" style="font-size: 0.7rem; margin-top: 5px; color: var(--accent); font-weight: bold;">Heatmap reveals after Loop...</div>
+                <div class="histo-container" id="histogram"></div>
+            </div>
+
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px;">
+                <button onclick="toggleNumbers()" style="background:#f1f5f9; color:#64748b; border:1px solid #e2e8f0;">Toggle #</button>
+                <button onclick="resetMaze()" style="background:#ef4444;">Restart Loop</button>
+            </div>
+        </div>
+    </div>
+
+    <div class="modal-overlay" id="win-modal">
+        <div class="modal">
+            <h2 style="margin:0; font-size: 1.1rem; color: var(--accent);">LOOP VERIFIED</h2>
+            <div id="final-stats" style="font-size: 0.8rem; color: #64748b; margin: 15px 0;"></div>
+            <input type="text" id="p-name" placeholder="YOUR HANDLE" maxlength="12" style="width: 100%; padding: 10px; margin-bottom: 10px; border: 1px solid #ddd; border-radius: 4px; font-family: inherit;">
+            <button style="width:100%" onclick="saveScore()">SUBMIT SCORE</button>
+        </div>
+    </div>
+
+<script>
+    const S = 13;
+    let CS = 36;
+    const colors = ["#ef4444", "#3b82f6", "#10b981", "#f59e0b", "#8b5cf6", "#ec4899", "#06b6d4", "#14b8a6", "#6366f1"];
+    
+    let history = JSON.parse(localStorage.getItem('chroma_v13_toggle_history') || '[]');
+    let curIdx = history.length > 0 ? history.length - 1 : 0;
+    let showNums = true;
+    
+    let state = { 
+        cells: [], balls: {}, player: {x:0, y:0}, collected: new Set(), path: [], gameOver: false,
+        startTime: null, duration: 0, timerInterval: null, showHeatmap: true
+    };
+
+    const pathCanvas = document.getElementById('path-canvas');
+    const pathCtx = pathCanvas.getContext('2d');
+    const wallCanvas = document.getElementById('wall-canvas');
+    const wallCtx = wallCanvas.getContext('2d');
+
+    function updateScale() {
+        CS = parseInt(getComputedStyle(document.documentElement).getPropertyValue('--cell'));
+        const totalSize = S * CS;
+        pathCanvas.width = totalSize; pathCanvas.height = totalSize;
+        wallCanvas.width = totalSize; wallCanvas.height = totalSize;
+        drawWalls(); drawPath();
+    }
+
+    function init() {
+        const hash = window.location.hash.substring(1);
+        if(hash) {
+            try {
+                const sharedMaze = JSON.parse(atob(hash));
+                if(!history.find(h => h.id === sharedMaze.id)) { history.push(sharedMaze); curIdx = history.length - 1; }
+            } catch(e) {}
+        }
+        if (!history[curIdx]) generate();
+        load(curIdx);
+        window.addEventListener('resize', updateScale);
+        updateScale();
+    }
+
+    function generate() {
+        let cells = Array.from({length: S}, (_, y) => Array.from({length: S}, (_, x) => ({
+            x, y, w: {t:false, r:false, b:false, l:false}
+        })));
+        let walls = 0;
+        while(walls < 28) {
+            let rx = Math.floor(Math.random()*S), ry = Math.floor(Math.random()*S);
+            let s = ['t','r','b','l'][Math.floor(Math.random()*4)];
+            if(!cells[ry][rx].w[s]) {
+                cells[ry][rx].w[s] = true;
+                if(s === 't' && ry > 0) cells[ry-1][rx].w.b = true;
+                if(s === 'b' && ry < S-1) cells[ry+1][rx].w.t = true;
+                if(s === 'l' && rx > 0) cells[ry][rx-1].w.r = true;
+                if(s === 'r' && rx < S-1) cells[ry][rx+1].w.l = true;
+                walls++;
+            }
+        }
+        let balls = {};
+        for(let i=1; i<=9; i++) {
+            let rx, ry;
+            do { rx = Math.floor(Math.random()*S); ry = Math.floor(Math.random()*S); } 
+            while (Object.values(balls).some(b => b.x === rx && b.y === ry));
+            balls[i] = {x: rx, y: ry};
+        }
+        history.push({cells, balls, id: history.length + 1});
+        localStorage.setItem('chroma_v13_toggle_history', JSON.stringify(history));
+    }
+
+    function load(idx) {
+        const d = history[idx];
+        state.cells = d.cells; state.balls = d.balls;
+        state.player = {x: d.balls[1].x, y: d.balls[1].y};
+        state.collected = new Set();
+        state.path = [{x: state.player.x, y: state.player.y, c: colors[0]}];
+        state.gameOver = false; state.startTime = null; state.duration = 0;
+        clearInterval(state.timerInterval);
+        document.getElementById('m-id').innerText = d.id;
+        document.getElementById('timer').innerText = "0.0s";
+        window.location.hash = btoa(JSON.stringify(d));
+        renderGrid(); drawWalls(); drawPath(); updateLB(); updateAnalytics();
+    }
+
+    function drawWalls() {
+        const totalSize = S * CS;
+        wallCtx.clearRect(0, 0, totalSize, totalSize);
+        wallCtx.lineWidth = 5; wallCtx.strokeStyle = '#0f172a';
+        wallCtx.lineCap = 'round'; wallCtx.lineJoin = 'round';
+        wallCtx.beginPath();
+        for(let y=0; y<S; y++) {
+            for(let x=0; x<S; x++) {
+                const cell = state.cells[y][x];
+                if(cell.w.r && x < S-1) { wallCtx.moveTo((x+1)*CS, y*CS); wallCtx.lineTo((x+1)*CS, (y+1)*CS); }
+                if(cell.w.b && y < S-1) { wallCtx.moveTo(x*CS, (y+1)*CS); wallCtx.lineTo((x+1)*CS, (y+1)*CS); }
+            }
+        }
+        wallCtx.stroke();
+    }
+
+    function renderGrid() {
+        const grid = document.getElementById('grid');
+        grid.innerHTML = '';
+        
+        const mId = history[curIdx].id;
+        const data = JSON.parse(localStorage.getItem('chroma_toggle_lb_v1') || '{}')[mId] || [];
+        const heatMap = {};
+        let maxHeat = 1;
+        
+        // Heatmap calculation
+        if(state.gameOver && state.showHeatmap) {
+            data.forEach(entry => {
+                if(entry.fullPath) {
+                    entry.fullPath.forEach(p => {
+                        const key = `${p.x},${p.y}`;
+                        heatMap[key] = (heatMap[key] || 0) + 1;
+                        if(heatMap[key] > maxHeat) maxHeat = heatMap[key];
+                    });
+                }
+            });
+        }
+
+        for(let y=0; y<S; y++) {
+            for(let x=0; x<S; x++) {
+                const el = document.createElement('div');
+                el.className = 'cell';
+                
+                if(state.gameOver && state.showHeatmap && heatMap[`${x},${y}`]) {
+                    const overlay = document.createElement('div');
+                    overlay.className = 'heatmap-overlay';
+                    overlay.style.backgroundColor = `rgba(79, 70, 229, ${heatMap[`${x},${y}`]/maxHeat})`;
+                    el.appendChild(overlay);
+                }
+
+                for(let [n, p] of Object.entries(state.balls)) {
+                    if(p.x === x && p.y === y) {
+                        const b = document.createElement('div');
+                        b.id = `ball-${n}`; b.className = `ball-anchor ${state.collected.has(parseInt(n))?'collected':''}`;
+                        b.style.color = colors[n-1]; 
+                        b.innerHTML = showNums ? `<span>${n}</span>` : '';
+                        el.appendChild(b);
+                    }
+                }
+                grid.appendChild(el);
+            }
+        }
+        document.getElementById('p-count').innerText = state.collected.size;
+        document.getElementById('step-count').innerText = Math.max(0, state.path.length - 1);
+    }
+
+    function drawPath() {
+        pathCtx.clearRect(0, 0, pathCanvas.width, pathCanvas.height);
+        if (state.path.length < 1) return;
+        pathCtx.lineCap = "round"; pathCtx.lineJoin = "round"; pathCtx.lineWidth = CS * 0.75;
+        for (let i = 0; i < state.path.length - 1; i++) {
+            pathCtx.beginPath(); pathCtx.strokeStyle = state.path[i].c;
+            pathCtx.moveTo(state.path[i].x * CS + CS/2, state.path[i].y * CS + CS/2);
+            pathCtx.lineTo(state.path[i+1].x * CS + CS/2, state.path[i+1].y * CS + CS/2);
+            pathCtx.stroke();
+        }
+        const h = state.path[state.path.length - 1];
+        pathCtx.beginPath(); pathCtx.fillStyle = h.c;
+        pathCtx.arc(h.x * CS + CS/2, h.y * CS + CS/2, (CS*0.75)/2, 0, Math.PI*2);
+        pathCtx.fill();
+    }
+
+    function move(dx, dy) {
+        if(state.gameOver) return;
+        if(!state.startTime) {
+            state.startTime = Date.now();
+            state.timerInterval = setInterval(() => {
+                state.duration = (Date.now() - state.startTime) / 1000;
+                document.getElementById('timer').innerText = state.duration.toFixed(1) + "s";
+            }, 100);
+        }
+        const {x, y} = state.player;
+        const w = state.cells[y][x].w;
+        let nx = x + dx, ny = y + dy;
+        if(dx === 1 && w.r || dx === -1 && w.l || dy === 1 && w.b || dy === -1 && w.t) return;
+        if(nx < 0 || nx >= S || ny < 0 || ny >= S) return;
+        
+        if (state.path.length > 1) {
+            const prev = state.path[state.path.length - 2];
+            if (nx === prev.x && ny === prev.y) {
+                const head = state.path.pop();
+                const ballAt = Object.entries(state.balls).find(([n, p]) => p.x === head.x && p.y === head.y);
+                if (ballAt && ballAt[0] != 1) state.collected.delete(parseInt(ballAt[0]));
+                state.player = {x: nx, y: ny};
+                renderGrid(); drawPath(); return;
+            }
+        }
+        if(state.path.some(p => p.x === nx && p.y === ny)) {
+            if(!(nx === state.balls[1].x && ny === state.balls[1].y && state.collected.size === 8)) return;
+        }
+
+        state.player = {x: nx, y: ny};
+        let curC = state.path[state.path.length-1].c;
+        for(let [n, p] of Object.entries(state.balls)) {
+            const num = parseInt(n);
+            if(p.x === nx && p.y === ny) {
+                if(num === 1 && state.collected.size === 8) {
+                    state.collected.add(1); state.gameOver = true;
+                    clearInterval(state.timerInterval);
+                    showWin();
+                    renderGrid(); 
+                    updateAnalytics();
+                } else if(num !== 1 && !state.collected.has(num)) {
+                    state.collected.add(num);
+                    curC = colors[num-1];
+                }
+            }
+        }
+        state.path.push({x: nx, y: ny, c: curC});
+        renderGrid(); drawPath();
+    }
+
+    function saveScore() {
+        const name = (document.getElementById('p-name').value || "ANON").toUpperCase();
+        const mId = history[curIdx].id;
+        const seq = [...state.collected].join('').substring(0, 9);
+        let lbs = JSON.parse(localStorage.getItem('chroma_toggle_lb_v1') || '{}');
+        if(!lbs[mId]) lbs[mId] = [];
+        lbs[mId].push({ name, seq, length: state.path.length, time: state.duration, fullPath: state.path.map(p => ({x: p.x, y: p.y})) });
+        localStorage.setItem('chroma_toggle_lb_v1', JSON.stringify(lbs));
+        document.getElementById('win-modal').style.display = 'none';
+        updateLB(); updateAnalytics(); renderGrid();
+    }
+
+    function updateLB() {
+        const mId = history[curIdx].id;
+        const data = JSON.parse(localStorage.getItem('chroma_toggle_lb_v1') || '{}')[mId] || [];
+        const list = document.getElementById('lb-list');
+        list.innerHTML = data.length ? '' : '<div style="color:#94a3b8; font-size:0.6rem; text-align:center; padding:10px;">MAZE UNDISCOVERED.</div>';
+        
+        const group = {};
+        data.forEach(e => {
+            if(!group[e.seq]) group[e.seq] = { freq: 0, minLen: Infinity, minTime: Infinity, bestUser: "" };
+            group[e.seq].freq++;
+            if(e.length < group[e.seq].minLen || (e.length === group[e.seq].minLen && e.time < group[e.seq].minTime)) {
+                group[e.seq].minLen = e.length; group[e.seq].minTime = e.time; group[e.seq].bestUser = e.name;
+            }
+        });
+
+        const sorted = Object.entries(group).sort((a,b) => {
+            if(a[1].freq !== b[1].freq) return a[1].freq - b[1].freq;
+            if(a[1].minLen !== b[1].minLen) return a[1].minLen - b[1].minLen;
+            return a[1].minTime - b[1].minTime;
+        });
+
+        sorted.forEach(([seq, stats], i) => {
+            list.innerHTML += `<div class="lb-item">
+                <div class="lb-rank">${i+1}</div>
+                <div><div class="lb-name">${stats.bestUser}</div><div class="lb-route">${seq}</div></div>
+                <div class="lb-stats">${stats.freq} USERS<br>${stats.minLen} STEPS<br>${stats.minTime.toFixed(1)}s</div>
+            </div>`;
+        });
+    }
+
+    function updateAnalytics() {
+        const mId = history[curIdx].id;
+        const data = JSON.parse(localStorage.getItem('chroma_toggle_lb_v1') || '{}')[mId] || [];
+        const histo = document.getElementById('histogram');
+        histo.innerHTML = '';
+        if(data.length === 0) return;
+
+        const seqFreq = {};
+        const seqToUser = {};
+        data.forEach(e => {
+            seqFreq[e.seq] = (seqFreq[e.seq] || 0) + 1;
+            if(!seqToUser[e.seq]) seqToUser[e.seq] = e.name;
+        });
+
+        const sortedEntries = Object.entries(seqFreq).sort((a,b) => b[1]-a[1]);
+        const maxFreq = Math.max(...Object.values(seqFreq));
+
+        sortedEntries.forEach(([seq, f]) => {
+            const bar = document.createElement('div');
+            bar.className = 'histo-bar';
+            bar.style.height = `${(f / maxFreq) * 100}%`;
+            bar.title = `${seqToUser[seq]} (Sequence: ${seq})`;
+            histo.appendChild(bar);
+        });
+
+        const playerSeq = [...state.collected].join('').substring(0, 9);
+        const playerFreq = seqFreq[playerSeq] || 0;
+        const rarity = playerFreq ? (1 - (playerFreq / data.length)) * 100 : 100;
+        document.getElementById('similarity-score').innerText = state.gameOver ? `Path Uniqueness: ${rarity.toFixed(1)}%` : `Heatmap reveals after Loop...`;
+    }
+
+    function toggleHeatmap() { state.showHeatmap = !state.showHeatmap; renderGrid(); }
+    function changeMaze(d) { if (d === 1 && curIdx === history.length - 1) generate(); curIdx = Math.max(0, Math.min(history.length - 1, curIdx + d)); load(curIdx); }
+    function resetMaze() { load(curIdx); }
+    function toggleNumbers() { showNums = !showNums; renderGrid(); }
+    function showWin() { document.getElementById('win-modal').style.display = 'flex'; document.getElementById('final-stats').innerText = `${state.path.length - 1} Steps | ${state.duration.toFixed(2)}s`; }
+    
+    window.addEventListener('keydown', (e) => {
+        if(['ArrowUp','ArrowDown','ArrowLeft','ArrowRight'].includes(e.key)) e.preventDefault();
+        if(e.key === 'ArrowUp') move(0, -1); if(e.key === 'ArrowDown') move(0, 1);
+        if(e.key === 'ArrowLeft') move(-1, 0); if(e.key === 'ArrowRight') move(1, 0);
+    });
+    init();
+</script>
+</body>
+</html>
