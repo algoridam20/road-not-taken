@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Chroma Loop: Analytics Elite</title>
+    <title>Chroma Loop: Touch Pro</title>
     <style>
         :root {
             --bg: #ffffff;
@@ -16,22 +16,27 @@
         body {
             font-family: 'Inter', system-ui, sans-serif;
             background: var(--bg); color: #1e293b;
-            margin: 0; padding: 20px;
+            margin: 0; padding: 10px;
             display: flex; flex-direction: column; align-items: center;
-            touch-action: manipulation;
+            /* Prevent pull-to-refresh on some mobile browsers */
+            overscroll-behavior: none;
         }
 
-        .header { text-align: center; margin-bottom: 20px; }
+        .header { text-align: center; margin-bottom: 10px; }
+        h1 { margin: 0; font-size: 1.2rem; letter-spacing: -0.5px; }
         
         .game-wrapper {
-            display: flex; flex-direction: column; gap: 15px;
-            align-items: center; width: 100%; max-width: 520px;
+            display: flex; flex-direction: column; gap: 12px;
+            align-items: center; width: 100%; max-width: 500px;
         }
 
         .grid-container {
             position: relative;
             background: var(--surface);
             padding: 10px; border-radius: 12px;
+            /* Crucial for mobile swipe: prevent scroll/zoom on this element */
+            touch-action: none; 
+            user-select: none;
         }
 
         #grid {
@@ -56,60 +61,60 @@
         #path-canvas { z-index: 5; }
 
         .ball-anchor {
-            width: 28px; height: 28px;
+            width: 26px; height: 26px;
             display: flex; justify-content: center; align-items: center;
             border-radius: 50%; z-index: 10;
             background-color: currentColor;
         }
         
-        .ball-anchor span { color: var(--surface); font-weight: 900; font-size: 15px; mix-blend-mode: screen; }
+        .ball-anchor span { color: var(--surface); font-weight: 900; font-size: 14px; mix-blend-mode: screen; }
         .ball-anchor.collected { opacity: 0.15; transform: scale(0.6); }
 
         .sidebar { width: 100%; display: flex; flex-direction: column; gap: 10px; }
-        .card { background: white; padding: 15px; border-radius: 12px; border: 1px solid #e2e8f0; }
+        .card { background: white; padding: 12px; border-radius: 12px; border: 1px solid #e2e8f0; }
 
         button {
-            padding: 10px; border: none; border-radius: 8px;
+            padding: 12px; border: none; border-radius: 8px;
             background: var(--wall); color: white;
             font-weight: 800; cursor: pointer; text-transform: uppercase; font-size: 10px;
         }
         button:hover { background: var(--accent); }
 
-        #lb-list { max-height: 180px; overflow-y: auto; scrollbar-width: thin; }
-        .lb-item { display: grid; grid-template-columns: 30px 1fr auto; padding: 8px 0; border-bottom: 1px solid #f1f5f9; align-items: center; }
-        .lb-rank { font-weight: 900; color: #cbd5e1; font-size: 0.8rem; }
-        .lb-name { font-weight: 800; font-size: 0.8rem; color: var(--wall); }
-        .lb-route { font-family: monospace; font-size: 0.75rem; color: var(--accent); font-weight: 900; }
-        .lb-stats { text-align: right; font-size: 0.6rem; color: #94a3b8; font-weight: 700; }
+        #lb-list { max-height: 150px; overflow-y: auto; scrollbar-width: thin; }
+        .lb-item { display: grid; grid-template-columns: 25px 1fr auto; padding: 6px 0; border-bottom: 1px solid #f1f5f9; align-items: center; }
+        .lb-rank { font-weight: 900; color: #cbd5e1; font-size: 0.75rem; }
+        .lb-name { font-weight: 800; font-size: 0.75rem; color: var(--wall); }
+        .lb-route { font-family: monospace; font-size: 0.7rem; color: var(--accent); font-weight: 900; }
+        .lb-stats { text-align: right; font-size: 0.55rem; color: #94a3b8; font-weight: 700; }
 
-        .histo-container { display: flex; align-items: flex-end; gap: 2px; height: 50px; margin-top: 10px; padding-bottom: 5px; border-bottom: 1px solid #eee; }
-        .histo-bar { flex: 1; background: var(--accent); min-width: 6px; border-top-left-radius: 2px; border-top-right-radius: 2px; transition: height 0.3s; cursor: help; }
-        .histo-bar:hover { background: #10b981; }
+        .histo-container { display: flex; align-items: flex-end; gap: 2px; height: 40px; margin-top: 8px; padding-bottom: 5px; border-bottom: 1px solid #eee; }
+        .histo-bar { flex: 1; background: var(--accent); min-width: 4px; border-top-left-radius: 2px; border-top-right-radius: 2px; transition: height 0.3s; }
 
         .modal-overlay {
             position: fixed; top: 0; left: 0; width: 100%; height: 100%;
             background: rgba(15, 23, 42, 0.9); display: none;
             justify-content: center; align-items: center; z-index: 100;
         }
-        .modal { background: white; padding: 25px; border-radius: 16px; width: 300px; text-align: center; }
+        .modal { background: white; padding: 25px; border-radius: 16px; width: 85%; max-width: 300px; text-align: center; }
+        .modal input { width: 100%; padding: 12px; margin: 10px 0; border: 1px solid #ddd; border-radius: 8px; box-sizing: border-box; font-family: inherit; }
 
-        .dpad { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; width: 150px; margin: 10px auto; }
-        .dbtn { height: 48px; background: #e2e8f0; color: var(--wall); font-weight: bold; border-radius: 8px; border:none; font-size: 1.2rem;}
+        .dpad { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; width: 150px; margin: 5px auto; }
+        .dbtn { height: 45px; background: #e2e8f0; color: var(--wall); font-weight: bold; border-radius: 8px; border:none; font-size: 1.2rem;}
 
-        @media (max-width: 450px) { :root { --cell: 28px; } .grid-container { padding: 10px; } canvas { top: 10px; left: 10px; } }
+        @media (max-width: 450px) { :root { --cell: 26px; } }
     </style>
 </head>
 <body>
 
     <div class="header">
-        <h1>CHROMA LOOP #<span id="m-id">1</span></h1>
-        <div style="font-size: 0.65rem; font-weight: 900; color: #94a3b8; margin-top: 5px;">
+        <h1>CHROMA LOOP <span id="m-id">1</span></h1>
+        <div style="font-size: 0.6rem; font-weight: 900; color: #94a3b8; margin-top: 2px;">
             <span id="timer">0.0s</span> | STEPS: <span id="step-count">0</span> | NODES: <span id="p-count">0</span>/9
         </div>
     </div>
 
     <div class="game-wrapper">
-        <div class="grid-container">
+        <div class="grid-container" id="touch-zone">
             <div id="grid"></div>
             <canvas id="wall-canvas"></canvas>
             <canvas id="path-canvas"></canvas>
@@ -124,26 +129,26 @@
 
         <div class="sidebar">
             <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px;">
-                <button onclick="changeMaze(-1)" style="background:#f1f5f9; color:#64748b; border:1px solid #e2e8f0;">Prev</button>
+                <button onclick="changeMaze(-1)" style="background:#f1f5f9; color:#64748b;">Prev</button>
                 <button onclick="changeMaze(1)" style="background:#10b981;">Next Maze</button>
             </div>
             
             <div class="card">
-                <div style="font-weight: 900; font-size: 0.65rem; color: #94a3b8; text-transform: uppercase; margin-bottom: 5px; border-bottom: 1px solid #eee; padding-bottom: 4px;">Elite Standings</div>
+                <div style="font-weight: 900; font-size: 0.6rem; color: #94a3b8; text-transform: uppercase; margin-bottom: 5px; border-bottom: 1px solid #eee; padding-bottom: 4px;">Elite Standings</div>
                 <div id="lb-list"></div>
             </div>
 
-            <div class="card" id="analytics-widget">
+            <div class="card">
                 <div style="display: flex; justify-content: space-between; align-items: center;">
-                    <div style="font-weight: 900; font-size: 0.65rem; color: #94a3b8; text-transform: uppercase;">Uniqueness Analytics</div>
-                    <button onclick="toggleHeatmap()" style="padding: 4px 8px; font-size: 8px; background: var(--accent);">Toggle Map</button>
+                    <div style="font-weight: 900; font-size: 0.6rem; color: #94a3b8; text-transform: uppercase;">Uniqueness Analytics</div>
+                    <button onclick="toggleHeatmap()" style="padding: 2px 6px; font-size: 7px; background: var(--accent);">Toggle Map</button>
                 </div>
-                <div id="similarity-score" style="font-size: 0.7rem; margin-top: 5px; color: var(--accent); font-weight: bold;">Heatmap reveals after Loop...</div>
+                <div id="similarity-score" style="font-size: 0.65rem; margin-top: 4px; color: var(--accent); font-weight: bold;">Solve to see heatmap...</div>
                 <div class="histo-container" id="histogram"></div>
             </div>
 
             <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px;">
-                <button onclick="toggleNumbers()" style="background:#f1f5f9; color:#64748b; border:1px solid #e2e8f0;">Toggle #</button>
+                <button onclick="toggleNumbers()" style="background:#f1f5f9; color:#64748b;">Toggle #</button>
                 <button onclick="resetMaze()" style="background:#ef4444;">Restart Loop</button>
             </div>
         </div>
@@ -153,7 +158,7 @@
         <div class="modal">
             <h2 style="margin:0; font-size: 1.1rem; color: var(--accent);">LOOP VERIFIED</h2>
             <div id="final-stats" style="font-size: 0.8rem; color: #64748b; margin: 15px 0;"></div>
-            <input type="text" id="p-name" placeholder="YOUR HANDLE" maxlength="12" style="width: 100%; padding: 10px; margin-bottom: 10px; border: 1px solid #ddd; border-radius: 4px; font-family: inherit;">
+            <input type="text" id="p-name" placeholder="YOUR HANDLE" maxlength="12">
             <button style="width:100%" onclick="saveScore()">SUBMIT SCORE</button>
         </div>
     </div>
@@ -163,7 +168,7 @@
     let CS = 36;
     const colors = ["#ef4444", "#3b82f6", "#10b981", "#f59e0b", "#8b5cf6", "#ec4899", "#06b6d4", "#14b8a6", "#6366f1"];
     
-    let history = JSON.parse(localStorage.getItem('chroma_v13_toggle_history') || '[]');
+    let history = JSON.parse(localStorage.getItem('chroma_v13_touch_history') || '[]');
     let curIdx = history.length > 0 ? history.length - 1 : 0;
     let showNums = true;
     
@@ -196,6 +201,7 @@
         if (!history[curIdx]) generate();
         load(curIdx);
         window.addEventListener('resize', updateScale);
+        setupTouchEvents(); // Mobile initialization
         updateScale();
     }
 
@@ -224,7 +230,7 @@
             balls[i] = {x: rx, y: ry};
         }
         history.push({cells, balls, id: history.length + 1});
-        localStorage.setItem('chroma_v13_toggle_history', JSON.stringify(history));
+        localStorage.setItem('chroma_v13_touch_history', JSON.stringify(history));
     }
 
     function load(idx) {
@@ -235,7 +241,7 @@
         state.path = [{x: state.player.x, y: state.player.y, c: colors[0]}];
         state.gameOver = false; state.startTime = null; state.duration = 0;
         clearInterval(state.timerInterval);
-        document.getElementById('m-id').innerText = d.id;
+        document.getElementById('m-id').innerText = "#" + d.id;
         document.getElementById('timer').innerText = "0.0s";
         window.location.hash = btoa(JSON.stringify(d));
         renderGrid(); drawWalls(); drawPath(); updateLB(); updateAnalytics();
@@ -260,43 +266,28 @@
     function renderGrid() {
         const grid = document.getElementById('grid');
         grid.innerHTML = '';
-        
         const mId = history[curIdx].id;
-        const data = JSON.parse(localStorage.getItem('chroma_toggle_lb_v1') || '{}')[mId] || [];
-        const heatMap = {};
-        let maxHeat = 1;
-        
-        // Heatmap calculation
+        const data = JSON.parse(localStorage.getItem('chroma_touch_lb_v1') || '{}')[mId] || [];
+        const heatMap = {}; let maxHeat = 1;
         if(state.gameOver && state.showHeatmap) {
-            data.forEach(entry => {
-                if(entry.fullPath) {
-                    entry.fullPath.forEach(p => {
-                        const key = `${p.x},${p.y}`;
-                        heatMap[key] = (heatMap[key] || 0) + 1;
-                        if(heatMap[key] > maxHeat) maxHeat = heatMap[key];
-                    });
-                }
-            });
+            data.forEach(entry => { if(entry.fullPath) entry.fullPath.forEach(p => {
+                const key = `${p.x},${p.y}`; heatMap[key] = (heatMap[key] || 0) + 1;
+                if(heatMap[key] > maxHeat) maxHeat = heatMap[key];
+            });});
         }
-
         for(let y=0; y<S; y++) {
             for(let x=0; x<S; x++) {
-                const el = document.createElement('div');
-                el.className = 'cell';
-                
+                const el = document.createElement('div'); el.className = 'cell';
                 if(state.gameOver && state.showHeatmap && heatMap[`${x},${y}`]) {
-                    const overlay = document.createElement('div');
-                    overlay.className = 'heatmap-overlay';
+                    const overlay = document.createElement('div'); overlay.className = 'heatmap-overlay';
                     overlay.style.backgroundColor = `rgba(79, 70, 229, ${heatMap[`${x},${y}`]/maxHeat})`;
                     el.appendChild(overlay);
                 }
-
                 for(let [n, p] of Object.entries(state.balls)) {
                     if(p.x === x && p.y === y) {
                         const b = document.createElement('div');
                         b.id = `ball-${n}`; b.className = `ball-anchor ${state.collected.has(parseInt(n))?'collected':''}`;
-                        b.style.color = colors[n-1]; 
-                        b.innerHTML = showNums ? `<span>${n}</span>` : '';
+                        b.style.color = colors[n-1]; b.innerHTML = showNums ? `<span>${n}</span>` : '';
                         el.appendChild(b);
                     }
                 }
@@ -343,9 +334,8 @@
             if (nx === prev.x && ny === prev.y) {
                 const head = state.path.pop();
                 const ballAt = Object.entries(state.balls).find(([n, p]) => p.x === head.x && p.y === head.y);
-                if (ballAt && ballAt[0] != 1) state.collected.delete(parseInt(ballAt[0]));
-                state.player = {x: nx, y: ny};
-                renderGrid(); drawPath(); return;
+                if (ballAt && parseInt(ballAt[0]) !== 1) state.collected.delete(parseInt(ballAt[0]));
+                state.player = {x: nx, y: ny}; renderGrid(); drawPath(); return;
             }
         }
         if(state.path.some(p => p.x === nx && p.y === ny)) {
@@ -360,9 +350,7 @@
                 if(num === 1 && state.collected.size === 8) {
                     state.collected.add(1); state.gameOver = true;
                     clearInterval(state.timerInterval);
-                    showWin();
-                    renderGrid(); 
-                    updateAnalytics();
+                    showWin(); renderGrid(); updateAnalytics();
                 } else if(num !== 1 && !state.collected.has(num)) {
                     state.collected.add(num);
                     curC = colors[num-1];
@@ -377,20 +365,19 @@
         const name = (document.getElementById('p-name').value || "ANON").toUpperCase();
         const mId = history[curIdx].id;
         const seq = [...state.collected].join('').substring(0, 9);
-        let lbs = JSON.parse(localStorage.getItem('chroma_toggle_lb_v1') || '{}');
+        let lbs = JSON.parse(localStorage.getItem('chroma_touch_lb_v1') || '{}');
         if(!lbs[mId]) lbs[mId] = [];
         lbs[mId].push({ name, seq, length: state.path.length, time: state.duration, fullPath: state.path.map(p => ({x: p.x, y: p.y})) });
-        localStorage.setItem('chroma_toggle_lb_v1', JSON.stringify(lbs));
+        localStorage.setItem('chroma_touch_lb_v1', JSON.stringify(lbs));
         document.getElementById('win-modal').style.display = 'none';
         updateLB(); updateAnalytics(); renderGrid();
     }
 
     function updateLB() {
         const mId = history[curIdx].id;
-        const data = JSON.parse(localStorage.getItem('chroma_toggle_lb_v1') || '{}')[mId] || [];
+        const data = JSON.parse(localStorage.getItem('chroma_touch_lb_v1') || '{}')[mId] || [];
         const list = document.getElementById('lb-list');
         list.innerHTML = data.length ? '' : '<div style="color:#94a3b8; font-size:0.6rem; text-align:center; padding:10px;">MAZE UNDISCOVERED.</div>';
-        
         const group = {};
         data.forEach(e => {
             if(!group[e.seq]) group[e.seq] = { freq: 0, minLen: Infinity, minTime: Infinity, bestUser: "" };
@@ -399,13 +386,11 @@
                 group[e.seq].minLen = e.length; group[e.seq].minTime = e.time; group[e.seq].bestUser = e.name;
             }
         });
-
         const sorted = Object.entries(group).sort((a,b) => {
             if(a[1].freq !== b[1].freq) return a[1].freq - b[1].freq;
             if(a[1].minLen !== b[1].minLen) return a[1].minLen - b[1].minLen;
             return a[1].minTime - b[1].minTime;
         });
-
         sorted.forEach(([seq, stats], i) => {
             list.innerHTML += `<div class="lb-item">
                 <div class="lb-rank">${i+1}</div>
@@ -417,33 +402,44 @@
 
     function updateAnalytics() {
         const mId = history[curIdx].id;
-        const data = JSON.parse(localStorage.getItem('chroma_toggle_lb_v1') || '{}')[mId] || [];
-        const histo = document.getElementById('histogram');
-        histo.innerHTML = '';
+        const data = JSON.parse(localStorage.getItem('chroma_touch_lb_v1') || '{}')[mId] || [];
+        const histo = document.getElementById('histogram'); histo.innerHTML = '';
         if(data.length === 0) return;
-
-        const seqFreq = {};
-        const seqToUser = {};
+        const seqFreq = {}; const seqToUser = {};
         data.forEach(e => {
             seqFreq[e.seq] = (seqFreq[e.seq] || 0) + 1;
             if(!seqToUser[e.seq]) seqToUser[e.seq] = e.name;
         });
-
         const sortedEntries = Object.entries(seqFreq).sort((a,b) => b[1]-a[1]);
         const maxFreq = Math.max(...Object.values(seqFreq));
-
         sortedEntries.forEach(([seq, f]) => {
-            const bar = document.createElement('div');
-            bar.className = 'histo-bar';
+            const bar = document.createElement('div'); bar.className = 'histo-bar';
             bar.style.height = `${(f / maxFreq) * 100}%`;
-            bar.title = `${seqToUser[seq]} (Sequence: ${seq})`;
-            histo.appendChild(bar);
+            bar.title = `${seqToUser[seq]} (${seq})`; histo.appendChild(bar);
         });
-
         const playerSeq = [...state.collected].join('').substring(0, 9);
         const playerFreq = seqFreq[playerSeq] || 0;
         const rarity = playerFreq ? (1 - (playerFreq / data.length)) * 100 : 100;
-        document.getElementById('similarity-score').innerText = state.gameOver ? `Path Uniqueness: ${rarity.toFixed(1)}%` : `Heatmap reveals after Loop...`;
+        document.getElementById('similarity-score').innerText = state.gameOver ? `Path Uniqueness: ${rarity.toFixed(1)}%` : `Solve to see heatmap...`;
+    }
+
+    // SWIPE DETECTION LOGIC
+    function setupTouchEvents() {
+        let touchStartX = 0, touchStartY = 0;
+        const zone = document.getElementById('touch-zone');
+        zone.addEventListener('touchstart', e => {
+            touchStartX = e.changedTouches[0].screenX;
+            touchStartY = e.changedTouches[0].screenY;
+        }, false);
+        zone.addEventListener('touchend', e => {
+            const dx = e.changedTouches[0].screenX - touchStartX;
+            const dy = e.changedTouches[0].screenY - touchStartY;
+            const absX = Math.abs(dx), absY = Math.abs(dy);
+            if (Math.max(absX, absY) > 20) { // Threshold for swipe
+                if (absX > absY) dx > 0 ? move(1, 0) : move(-1, 0);
+                else dy > 0 ? move(0, 1) : move(0, -1);
+            }
+        }, false);
     }
 
     function toggleHeatmap() { state.showHeatmap = !state.showHeatmap; renderGrid(); }
