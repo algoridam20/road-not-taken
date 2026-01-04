@@ -508,20 +508,50 @@
 
     function setupInteraction() {
         const zone = document.getElementById('touch-zone');
+        let lastCell = null;
+        
         const handle = (e) => {
             if (state.gameOver) return;
             const t = e.touches ? e.touches[0] : e;
             const el = document.elementFromPoint(t.clientX, t.clientY);
             if (!el) return;
             const cell = el.closest('.cell');
-            if (cell) moveTowards(parseInt(cell.dataset.x), parseInt(cell.dataset.y));
+            if (cell) {
+                const x = parseInt(cell.dataset.x);
+                const y = parseInt(cell.dataset.y);
+                const cellKey = `${x},${y}`;
+                
+                // Only move if we're on a different cell
+                if (lastCell !== cellKey) {
+                    lastCell = cellKey;
+                    moveTowards(x, y);
+                }
+            }
         };
-        zone.addEventListener('mousedown', e => { state.isDragging = true; handle(e); });
+        
+        const startDrag = (e) => {
+            state.isDragging = true;
+            lastCell = null;
+            handle(e);
+        };
+        
+        const endDrag = () => {
+            state.isDragging = false;
+            lastCell = null;
+        };
+        
+        zone.addEventListener('mousedown', startDrag);
         window.addEventListener('mousemove', e => { if(state.isDragging) handle(e); });
-        window.addEventListener('mouseup', () => state.isDragging = false);
-        zone.addEventListener('touchstart', e => { state.isDragging = true; handle(e); }, {passive:false});
-        zone.addEventListener('touchmove', e => { if(state.isDragging) { e.preventDefault(); handle(e); } }, {passive:false});
-        window.addEventListener('touchend', () => state.isDragging = false);
+        window.addEventListener('mouseup', endDrag);
+        zone.addEventListener('touchstart', startDrag, {passive:false});
+        zone.addEventListener('touchmove', e => { 
+            if(state.isDragging) { 
+                e.preventDefault(); 
+                handle(e); 
+            } 
+        }, {passive:false});
+        window.addEventListener('touchend', endDrag);
+        window.addEventListener('touchcancel', endDrag);
     }
 
     function setupKeyboard() {
@@ -785,7 +815,7 @@
             
             const mId = history[curIdx].id;
             const pathId = state.collectionOrder.join('');
-            const text = `Road Not Taken #${mId} - Path: ${pathId}\n${state.path.length - 1} steps in ${state.duration.toFixed(2)}s`;
+            const text = `Road Not Taken #${mId} - Path: ${pathId}\n${state.path.length - 1} steps in ${state.duration.toFixed(2)}s\n\nPlay at: https://algoridam20.github.io/road-not-taken/`;
             
             const file = new File([blob], 'road-not-taken.png', { type: 'image/png' });
             
