@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Chroma Loop: Secure Zip</title>
+    <title>Road Not Taken</title>
     <style>
         :root {
             --bg: #ffffff;
@@ -13,6 +13,8 @@
             --cell: 36px;
         }
 
+        * { box-sizing: border-box; }
+
         body {
             font-family: 'Inter', system-ui, sans-serif;
             background: var(--bg); color: #1e293b;
@@ -20,6 +22,7 @@
             display: flex; flex-direction: column; align-items: center;
             overscroll-behavior: none;
             user-select: none; -webkit-user-select: none;
+            min-height: 100vh;
         }
 
         .header { text-align: center; margin-bottom: 10px; pointer-events: none; }
@@ -34,13 +37,16 @@
             background: var(--surface);
             padding: 10px; border-radius: 12px;
             touch-action: none; 
-            overflow: hidden; /* Prevent visual bleed */
+            overflow: hidden;
+            border: 2px solid #e2e8f0;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
         }
 
         #grid {
             display: grid;
             grid-template-columns: repeat(13, var(--cell));
             grid-template-rows: repeat(13, var(--cell));
+            gap: 0;
         }
 
         .cell { 
@@ -64,6 +70,7 @@
             border-radius: 50%; z-index: 10;
             background-color: currentColor;
             pointer-events: none;
+            transition: all 0.2s ease;
         }
         
         .ball-anchor span { color: var(--surface); font-weight: 900; font-size: 15px; mix-blend-mode: screen; }
@@ -76,12 +83,50 @@
             padding: 12px; border: none; border-radius: 8px;
             background: var(--wall); color: white;
             font-weight: 800; cursor: pointer; text-transform: uppercase; font-size: 10px;
+            transition: opacity 0.2s;
         }
 
-        #lb-list { max-height: 120px; overflow-y: auto; scrollbar-width: thin; }
-        .lb-item { display: grid; grid-template-columns: 25px 1fr auto; padding: 6px 0; border-bottom: 1px solid #f1f5f9; align-items: center; }
-        .lb-rank { font-weight: 900; color: #cbd5e1; font-size: 0.75rem; }
-        .lb-stats { text-align: right; font-size: 0.55rem; color: #94a3b8; font-weight: 700; }
+        button:hover { opacity: 0.8; }
+        button:active { opacity: 0.6; }
+
+        #lb-list { max-height: 200px; overflow-y: auto; scrollbar-width: thin; }
+        .lb-item { 
+            display: grid; 
+            grid-template-columns: 30px 1fr auto; 
+            padding: 8px 0; 
+            border-bottom: 1px solid #f1f5f9; 
+            align-items: center;
+            gap: 8px;
+        }
+        .lb-rank { 
+            font-weight: 900; 
+            color: #cbd5e1; 
+            font-size: 0.75rem; 
+            text-align: center;
+        }
+        .lb-name {
+            font-weight: 800; 
+            font-size: 0.7rem;
+        }
+        .lb-seq {
+            font-family: monospace; 
+            font-size: 0.6rem; 
+            color: var(--accent); 
+            font-weight: 900;
+            margin-top: 2px;
+        }
+        .lb-freq {
+            font-size: 0.55rem;
+            color: #10b981;
+            font-weight: 700;
+            margin-top: 1px;
+        }
+        .lb-stats { 
+            text-align: right; 
+            font-size: 0.55rem; 
+            color: #94a3b8; 
+            font-weight: 700; 
+        }
 
         .histo-container { display: flex; align-items: flex-end; gap: 2px; height: 35px; margin-top: 8px; padding-bottom: 5px; border-bottom: 1px solid #eee; }
         .histo-bar { flex: 1; background: var(--accent); min-width: 4px; border-top-left-radius: 1px; border-top-right-radius: 1px; }
@@ -94,15 +139,19 @@
         .modal { background: white; padding: 25px; border-radius: 16px; width: 85%; max-width: 300px; text-align: center; }
         .modal input { width: 100%; padding: 12px; margin: 10px 0; border: 1px solid #ddd; border-radius: 8px; box-sizing: border-box; }
 
-        @media (max-width: 450px) { :root { --cell: 28px; } .ball-anchor { width: 22px; height: 22px; } .ball-anchor span { font-size: 12px; } }
+        @media (max-width: 450px) { 
+            :root { --cell: 28px; } 
+            .ball-anchor { width: 22px; height: 22px; } 
+            .ball-anchor span { font-size: 12px; }
+        }
     </style>
 </head>
 <body>
 
     <div class="header">
-        <h1 style="margin:0; font-size: 1.1rem; letter-spacing: 1px;">CHROMA LOOP #<span id="m-id">1</span></h1>
+        <h1 style="margin:0; font-size: 1.1rem; letter-spacing: 1px;">ROAD NOT TAKEN #<span id="m-id">1</span></h1>
         <div style="font-size: 0.6rem; font-weight: 900; color: #94a3b8;">
-            <span id="timer">0.0s</span> | STEPS: <span id="step-count">0</span> | NODES: <span id="p-count">0</span>/9
+            <span id="timer">0.0s</span> | STEPS: <span id="step-count">0</span> | PATH: <span id="p-seq">1</span>
         </div>
     </div>
 
@@ -119,14 +168,16 @@
                 <button onclick="changeMaze(1)" style="background:#10b981;">Next Maze</button>
             </div>
             
+            <button id="share-btn" onclick="shareResult()" style="background:#8b5cf6; display:none;">📤 Share Result</button>
+            
             <div class="card">
-                <div style="font-weight: 900; font-size: 0.6rem; color: #94a3b8; text-transform: uppercase;">Standings</div>
+                <div style="font-weight: 900; font-size: 0.6rem; color: #94a3b8; text-transform: uppercase; margin-bottom: 8px;">Leaderboard - All Paths</div>
                 <div id="lb-list"></div>
             </div>
 
             <div class="card">
                 <div style="display: flex; justify-content: space-between; align-items: center;">
-                    <div style="font-weight: 900; font-size: 0.6rem; color: #94a3b8; text-transform: uppercase;">Uniqueness</div>
+                    <div style="font-weight: 900; font-size: 0.6rem; color: #94a3b8; text-transform: uppercase;">Path Uniqueness</div>
                     <button onclick="toggleHeatmap()" style="padding: 2px 6px; font-size: 7px; background: var(--accent);">Map</button>
                 </div>
                 <div id="rarity-text" style="font-size: 0.65rem; margin-top: 4px; color: var(--accent); font-weight: bold;">Zip to solve...</div>
@@ -142,7 +193,7 @@
 
     <div class="modal-overlay" id="win-modal">
         <div class="modal">
-            <h2 style="margin:0; font-size: 1.1rem; color: var(--accent);">LOOP SECURED</h2>
+            <h2 style="margin:0; font-size: 1.1rem; color: var(--accent);">ROAD SECURED</h2>
             <div id="final-stats" style="font-size: 0.8rem; color: #64748b; margin: 15px 0;"></div>
             <input type="text" id="p-name" placeholder="HANDLE" maxlength="12">
             <button style="width:100%" onclick="saveScore()">SUBMIT</button>
@@ -154,13 +205,14 @@
     let CS = 36;
     const colors = ["#ef4444", "#3b82f6", "#10b981", "#f59e0b", "#8b5cf6", "#ec4899", "#06b6d4", "#14b8a6", "#6366f1"];
     
-    let history = JSON.parse(localStorage.getItem('chroma_v13_secure_zip') || '[]');
-    let curIdx = history.length > 0 ? history.length - 1 : 0;
+    let history = [];
+    let curIdx = 0;
     let showNums = true;
     
     let state = { 
-        cells: [], balls: {}, player: {x:0, y:0}, collected: new Set(), path: [], gameOver: false,
-        startTime: null, duration: 0, timerInterval: null, showHeatmap: true, isDragging: false
+        cells: [], balls: {}, player: {x:0, y:0}, collected: new Set(), collectionOrder: [], 
+        path: [], gameOver: false, startTime: null, duration: 0, timerInterval: null, 
+        showHeatmap: false, isDragging: false, completionTimestamp: null
     };
 
     const pathCanvas = document.getElementById('path-canvas');
@@ -177,12 +229,36 @@
     }
 
     function init() {
-        if (!history[curIdx]) generate();
+        loadHistory();
+        if (history.length === 0) {
+            generate();
+        }
+        curIdx = history.length - 1;
         load(curIdx);
         window.addEventListener('resize', updateScale);
         setupInteraction();
         setupKeyboard();
         updateScale();
+    }
+
+    function loadHistory() {
+        try {
+            const stored = localStorage.getItem('chroma_v13_secure_zip');
+            if (stored) {
+                history = JSON.parse(stored);
+            }
+        } catch (e) {
+            console.error('Failed to load history:', e);
+            history = [];
+        }
+    }
+
+    function saveHistory() {
+        try {
+            localStorage.setItem('chroma_v13_secure_zip', JSON.stringify(history));
+        } catch (e) {
+            console.error('Failed to save history:', e);
+        }
     }
 
     function generate() {
@@ -210,33 +286,56 @@
             balls[i] = {x: rx, y: ry};
         }
         history.push({cells, balls, id: history.length + 1});
-        localStorage.setItem('chroma_v13_secure_zip', JSON.stringify(history));
+        saveHistory();
     }
 
     function load(idx) {
+        if (idx < 0 || idx >= history.length) return;
+        
         const d = history[idx];
-        state.cells = d.cells; state.balls = d.balls;
+        state.cells = JSON.parse(JSON.stringify(d.cells));
+        state.balls = JSON.parse(JSON.stringify(d.balls));
         state.player = {x: d.balls[1].x, y: d.balls[1].y};
-        state.collected = new Set();
+        state.collected = new Set([1]);
+        state.collectionOrder = [1];
         state.path = [{x: state.player.x, y: state.player.y, c: colors[0]}];
-        state.gameOver = false; state.startTime = null; state.duration = 0;
+        state.gameOver = false; 
+        state.startTime = null; 
+        state.duration = 0;
+        state.completionTimestamp = null;
         clearInterval(state.timerInterval);
+        state.timerInterval = null;
+        
         document.getElementById('m-id').innerText = d.id;
         document.getElementById('timer').innerText = "0.0s";
-        renderGrid(); drawWalls(); drawPath(); updateLB(); updateAnalytics();
+        document.getElementById('share-btn').style.display = 'none';
+        updatePathDisplay();
+        renderGrid(); 
+        drawWalls(); 
+        drawPath(); 
+        updateLB(); 
+        updateAnalytics();
     }
 
     function drawWalls() {
         const totalSize = S * CS;
         wallCtx.clearRect(0, 0, totalSize, totalSize);
-        wallCtx.lineWidth = 5; wallCtx.strokeStyle = '#0f172a';
-        wallCtx.lineCap = 'round'; wallCtx.lineJoin = 'round';
+        wallCtx.lineWidth = 5; 
+        wallCtx.strokeStyle = '#0f172a';
+        wallCtx.lineCap = 'round'; 
+        wallCtx.lineJoin = 'round';
         wallCtx.beginPath();
         for(let y=0; y<S; y++) {
             for(let x=0; x<S; x++) {
                 const cell = state.cells[y][x];
-                if(cell.w.r && x < S-1) { wallCtx.moveTo((x+1)*CS, y*CS); wallCtx.lineTo((x+1)*CS, (y+1)*CS); }
-                if(cell.w.b && y < S-1) { wallCtx.moveTo(x*CS, (y+1)*CS); wallCtx.lineTo((x+1)*CS, (y+1)*CS); }
+                if(cell.w.r && x < S-1) { 
+                    wallCtx.moveTo((x+1)*CS, y*CS); 
+                    wallCtx.lineTo((x+1)*CS, (y+1)*CS); 
+                }
+                if(cell.w.b && y < S-1) { 
+                    wallCtx.moveTo(x*CS, (y+1)*CS); 
+                    wallCtx.lineTo((x+1)*CS, (y+1)*CS); 
+                }
             }
         }
         wallCtx.stroke();
@@ -246,60 +345,89 @@
         const grid = document.getElementById('grid');
         grid.innerHTML = '';
         const mId = history[curIdx].id;
-        const data = JSON.parse(localStorage.getItem('chroma_secure_zip_lb') || '{}')[mId] || [];
-        const heatMap = {}; let maxHeat = 1;
-        if(state.gameOver && state.showHeatmap) {
-            data.forEach(entry => { if(entry.fullPath) entry.fullPath.forEach(p => {
-                const key = `${p.x},${p.y}`; heatMap[key] = (heatMap[key] || 0) + 1;
-                if(heatMap[key] > maxHeat) maxHeat = heatMap[key];
-            });});
+        
+        let data = [];
+        try {
+            const lbData = localStorage.getItem('chroma_secure_zip_lb');
+            if (lbData) {
+                const parsed = JSON.parse(lbData);
+                data = parsed[mId] || [];
+            }
+        } catch (e) {
+            console.error('Failed to load leaderboard:', e);
         }
+        
+        const heatMap = {}; 
+        let maxHeat = 1;
+        if(state.gameOver && state.showHeatmap) {
+            data.forEach(entry => { 
+                if(entry.fullPath) entry.fullPath.forEach(p => {
+                    const key = `${p.x},${p.y}`; 
+                    heatMap[key] = (heatMap[key] || 0) + 1;
+                    if(heatMap[key] > maxHeat) maxHeat = heatMap[key];
+                });
+            });
+        }
+        
         for(let y=0; y<S; y++) {
             for(let x=0; x<S; x++) {
-                const el = document.createElement('div'); el.className = 'cell';
-                el.dataset.x = x; el.dataset.y = y;
+                const el = document.createElement('div'); 
+                el.className = 'cell';
+                el.dataset.x = x; 
+                el.dataset.y = y;
+                
                 if(state.gameOver && state.showHeatmap && heatMap[`${x},${y}`]) {
-                    const overlay = document.createElement('div'); overlay.className = 'heatmap-overlay';
+                    const overlay = document.createElement('div'); 
+                    overlay.className = 'heatmap-overlay';
                     overlay.style.backgroundColor = `rgba(79, 70, 229, ${heatMap[`${x},${y}`]/maxHeat})`;
                     el.appendChild(overlay);
                 }
+                
                 for(let [n, p] of Object.entries(state.balls)) {
                     if(p.x === x && p.y === y) {
                         const b = document.createElement('div');
-                        b.id = `ball-${n}`; b.className = `ball-anchor ${state.collected.has(parseInt(n))?'collected':''}`;
-                        b.style.color = colors[n-1]; b.innerHTML = showNums ? `<span>${n}</span>` : '';
+                        b.id = `ball-${n}`; 
+                        b.className = `ball-anchor ${state.collected.has(parseInt(n))?'collected':''}`;
+                        b.style.color = colors[n-1]; 
+                        b.innerHTML = showNums ? `<span>${n}</span>` : '';
                         el.appendChild(b);
                     }
                 }
                 grid.appendChild(el);
             }
         }
-        document.getElementById('p-count').innerText = state.collected.size;
         document.getElementById('step-count').innerText = Math.max(0, state.path.length - 1);
+    }
+
+    function updatePathDisplay() {
+        document.getElementById('p-seq').innerText = state.collectionOrder.join('');
     }
 
     function drawPath() {
         pathCtx.clearRect(0, 0, pathCanvas.width, pathCanvas.height);
         if (state.path.length < 1) return;
-        pathCtx.lineCap = "round"; pathCtx.lineJoin = "round"; 
+        pathCtx.lineCap = "round"; 
+        pathCtx.lineJoin = "round"; 
         const pathWidth = CS * (14 / 36); 
         pathCtx.lineWidth = pathWidth; 
         
         for (let i = 0; i < state.path.length - 1; i++) {
-            pathCtx.beginPath(); pathCtx.strokeStyle = state.path[i].c;
+            pathCtx.beginPath(); 
+            pathCtx.strokeStyle = state.path[i].c;
             pathCtx.moveTo(state.path[i].x * CS + CS/2, state.path[i].y * CS + CS/2);
             pathCtx.lineTo(state.path[i+1].x * CS + CS/2, state.path[i+1].y * CS + CS/2);
             pathCtx.stroke();
         }
         const h = state.path[state.path.length - 1];
-        pathCtx.beginPath(); pathCtx.fillStyle = h.c;
+        pathCtx.beginPath(); 
+        pathCtx.fillStyle = h.c;
         pathCtx.arc(h.x * CS + CS/2, h.y * CS + CS/2, pathWidth/2, 0, Math.PI*2);
         pathCtx.fill();
     }
 
     function moveTowards(nx, ny) {
         if(state.gameOver) return;
-        // Strict boundary clamp
+        
         nx = Math.max(0, Math.min(S - 1, nx));
         ny = Math.max(0, Math.min(S - 1, ny));
         
@@ -322,7 +450,6 @@
         while (curX !== nx || curY !== ny) {
             let nextX = curX + stepX, nextY = curY + stepY;
             
-            // Loop internal boundary check
             if (nextX < 0 || nextX >= S || nextY < 0 || nextY >= S) break;
 
             const w = state.cells[curY][curX].w;
@@ -333,13 +460,24 @@
                 if (nextX === prev.x && nextY === prev.y) {
                     const head = state.path.pop();
                     const b = Object.entries(state.balls).find(([n, p]) => p.x === head.x && p.y === head.y);
-                    if (b && parseInt(b[0]) !== 1) state.collected.delete(parseInt(b[0]));
-                    curX = nextX; curY = nextY; state.player = {x: curX, y: curY}; continue;
+                    if (b) {
+                        const ballNum = parseInt(b[0]);
+                        if (ballNum !== 1 && state.collected.has(ballNum)) {
+                            state.collected.delete(ballNum);
+                            const idx = state.collectionOrder.lastIndexOf(ballNum);
+                            if (idx !== -1) {
+                                state.collectionOrder.splice(idx, 1);
+                            }
+                        }
+                    }
+                    curX = nextX; curY = nextY; state.player = {x: curX, y: curY}; 
+                    updatePathDisplay();
+                    continue;
                 }
             }
 
             if(state.path.some(p => p.x === nextX && p.y === nextY)) {
-                if(!(nextX === state.balls[1].x && nextY === state.balls[1].y && state.collected.size === 8)) break;
+                if(!(nextX === state.balls[1].x && nextY === state.balls[1].y && state.collected.size === 9)) break;
             }
 
             curX = nextX; curY = nextY;
@@ -349,17 +487,23 @@
             for(let [n, p] of Object.entries(state.balls)) {
                 const num = parseInt(n);
                 if(p.x === curX && p.y === curY) {
-                    if(num === 1 && state.collected.size === 8) {
-                        state.collected.add(1); state.gameOver = true;
-                        clearInterval(state.timerInterval); showWin();
+                    if(num === 1 && state.collected.size === 9) {
+                        state.gameOver = true;
+                        state.completionTimestamp = Date.now();
+                        clearInterval(state.timerInterval); 
+                        showWin();
                     } else if(num !== 1 && !state.collected.has(num)) {
-                        state.collected.add(num); curC = colors[num-1];
+                        state.collected.add(num);
+                        state.collectionOrder.push(num);
+                        curC = colors[num-1];
+                        updatePathDisplay();
                     }
                 }
             }
             state.path.push({x: curX, y: curY, c: curC});
         }
-        renderGrid(); drawPath();
+        renderGrid(); 
+        drawPath();
     }
 
     function setupInteraction() {
@@ -385,64 +529,305 @@
             if(['ArrowUp','ArrowDown','ArrowLeft','ArrowRight'].includes(e.key)) {
                 e.preventDefault();
                 let nx = state.player.x, ny = state.player.y;
-                if(e.key === 'ArrowUp') ny--; if(e.key === 'ArrowDown') ny++;
-                if(e.key === 'ArrowLeft') nx--; if(e.key === 'ArrowRight') nx++;
+                if(e.key === 'ArrowUp') ny--; 
+                if(e.key === 'ArrowDown') ny++;
+                if(e.key === 'ArrowLeft') nx--; 
+                if(e.key === 'ArrowRight') nx++;
                 moveTowards(nx, ny);
             }
         });
     }
 
     function saveScore() {
-        const name = (document.getElementById('p-name').value || "ANON").toUpperCase();
+        const name = (document.getElementById('p-name').value || "ANON").toUpperCase().substring(0, 12);
         const mId = history[curIdx].id;
-        const seq = [...state.collected].join('').substring(0, 9);
-        let lbs = JSON.parse(localStorage.getItem('chroma_secure_zip_lb') || '{}');
-        if(!lbs[mId]) lbs[mId] = [];
-        lbs[mId].push({ name, seq, length: state.path.length, time: state.duration, fullPath: state.path.map(p => ({x: p.x, y: p.y})) });
-        localStorage.setItem('chroma_secure_zip_lb', JSON.stringify(lbs));
+        const pathId = state.collectionOrder.join('');
+        
+        try {
+            let lbs = JSON.parse(localStorage.getItem('chroma_secure_zip_lb') || '{}');
+            if(!lbs[mId]) lbs[mId] = [];
+            lbs[mId].push({ 
+                name, 
+                pathId, 
+                length: state.path.length - 1, 
+                time: state.duration,
+                timestamp: state.completionTimestamp,
+                fullPath: state.path.map(p => ({x: p.x, y: p.y})) 
+            });
+            localStorage.setItem('chroma_secure_zip_lb', JSON.stringify(lbs));
+        } catch (e) {
+            console.error('Failed to save score:', e);
+        }
+        
         document.getElementById('win-modal').style.display = 'none';
-        updateLB(); updateAnalytics(); renderGrid();
+        document.getElementById('share-btn').style.display = 'block';
+        updateLB(); 
+        updateAnalytics(); 
+        renderGrid();
     }
 
     function updateLB() {
         const mId = history[curIdx].id;
-        const data = JSON.parse(localStorage.getItem('chroma_secure_zip_lb') || '{}')[mId] || [];
+        let data = [];
+        try {
+            const lbData = localStorage.getItem('chroma_secure_zip_lb');
+            if (lbData) {
+                const parsed = JSON.parse(lbData);
+                data = parsed[mId] || [];
+            }
+        } catch (e) {
+            console.error('Failed to load leaderboard:', e);
+        }
+        
         const list = document.getElementById('lb-list');
-        list.innerHTML = data.length ? '' : '<div style="color:#94a3b8; font-size:0.6rem; text-align:center;">EMPTY...</div>';
-        const group = {};
-        data.forEach(e => {
-            if(!group[e.seq]) group[e.seq] = { freq: 0, minLen: Infinity, bestUser: "" };
-            group[e.seq].freq++;
-            if(e.length < group[e.seq].minLen) { group[e.seq].minLen = e.length; group[e.seq].bestUser = e.name; }
+        
+        if (data.length === 0) {
+            list.innerHTML = '<div style="color:#94a3b8; font-size:0.6rem; text-align:center; padding: 10px 0;">EMPTY...</div>';
+            return;
+        }
+
+        // Calculate path frequencies (rarity)
+        const pathFreq = {};
+        data.forEach(e => pathFreq[e.pathId] = (pathFreq[e.pathId] || 0) + 1);
+
+        // Sort by: 1) Rarity (lower freq = better), 2) Path length (shorter = better), 3) Time (faster = better), 4) Timestamp (earlier = better)
+        const sorted = data.sort((a, b) => {
+            const freqA = pathFreq[a.pathId];
+            const freqB = pathFreq[b.pathId];
+            
+            if (freqA !== freqB) return freqA - freqB; // Rarer path wins
+            if (a.length !== b.length) return a.length - b.length; // Shorter path wins
+            if (Math.abs(a.time - b.time) > 0.001) return a.time - b.time; // Faster time wins
+            return (a.timestamp || 0) - (b.timestamp || 0); // Earlier completion wins
         });
-        const sorted = Object.entries(group).sort((a,b) => a[1].freq - b[1].freq || a[1].minLen - b[1].minLen);
-        sorted.forEach(([seq, s], i) => {
-            list.innerHTML += `<div class="lb-item"><div class="lb-rank">${i+1}</div><div><div style="font-weight:800; font-size:0.7rem;">${s.bestUser}</div><div style="font-family:monospace; font-size:0.65rem; color:var(--accent); font-weight:900;">${seq}</div></div><div class="lb-stats">${s.freq} FOUND<br>${s.minLen} STEPS</div></div>`;
+        
+        list.innerHTML = '';
+        sorted.forEach((entry, i) => {
+            const freq = pathFreq[entry.pathId];
+            const freqText = freq === 1 ? '🔹 unique' : `🔹 ${freq}× found`;
+            list.innerHTML += `
+                <div class="lb-item">
+                    <div class="lb-rank">${i+1}</div>
+                    <div>
+                        <div class="lb-name">${entry.name}</div>
+                        <div class="lb-seq">${entry.pathId}</div>
+                        <div class="lb-freq">${freqText}</div>
+                    </div>
+                    <div class="lb-stats">
+                        ${entry.time.toFixed(2)}s<br>
+                        ${entry.length} steps
+                    </div>
+                </div>
+            `;
         });
     }
 
     function updateAnalytics() {
         const mId = history[curIdx].id;
-        const data = JSON.parse(localStorage.getItem('chroma_secure_zip_lb') || '{}')[mId] || [];
-        const histo = document.getElementById('histogram'); histo.innerHTML = '';
-        if(data.length === 0) return;
-        const seqFreq = {}; data.forEach(e => seqFreq[e.seq] = (seqFreq[e.seq] || 0) + 1);
-        const sorted = Object.entries(seqFreq).sort((a,b) => b[1]-a[1]);
-        const max = Math.max(...Object.values(seqFreq));
-        sorted.forEach(([seq, f]) => {
-            const bar = document.createElement('div'); bar.className = 'histo-bar';
-            bar.style.height = `${(f / max) * 100}%`; histo.appendChild(bar);
+        let data = [];
+        try {
+            const lbData = localStorage.getItem('chroma_secure_zip_lb');
+            if (lbData) {
+                const parsed = JSON.parse(lbData);
+                data = parsed[mId] || [];
+            }
+        } catch (e) {
+            console.error('Failed to load analytics:', e);
+        }
+        
+        const histo = document.getElementById('histogram'); 
+        histo.innerHTML = '';
+        
+        if(data.length === 0) {
+            document.getElementById('rarity-text').innerText = 'Zip to solve...';
+            return;
+        }
+        
+        const pathFreq = {}; 
+        data.forEach(e => pathFreq[e.pathId] = (pathFreq[e.pathId] || 0) + 1);
+        const sorted = Object.entries(pathFreq).sort((a,b) => b[1]-a[1]);
+        const max = Math.max(...Object.values(pathFreq));
+        const uniquePaths = Object.keys(pathFreq).length;
+        
+        sorted.forEach(([pathId, f]) => {
+            const bar = document.createElement('div'); 
+            bar.className = 'histo-bar';
+            bar.style.height = `${(f / max) * 100}%`; 
+            bar.title = `Path ${pathId}: ${f} times`;
+            histo.appendChild(bar);
         });
-        const playerSeq = [...state.collected].join('').substring(0, 9);
-        const rarity = seqFreq[playerSeq] ? (1 - (seqFreq[playerSeq] / data.length)) * 100 : 100;
-        document.getElementById('rarity-text').innerText = state.gameOver ? `Path Rarity: ${rarity.toFixed(1)}%` : `Analyzing current zip...`;
+        
+        const playerPathId = state.collectionOrder.join('');
+        const frequency = pathFreq[playerPathId] || 0;
+        const rarity = frequency > 0 ? ((uniquePaths - sorted.findIndex(e => e[0] === playerPathId)) / uniquePaths * 100) : 100;
+        
+        document.getElementById('rarity-text').innerText = state.gameOver 
+            ? `Path ${playerPathId}: ${frequency} found (${rarity.toFixed(0)}% rare) • ${uniquePaths} unique paths` 
+            : `Current: ${playerPathId} • ${uniquePaths} unique paths discovered`;
     }
 
-    function toggleHeatmap() { state.showHeatmap = !state.showHeatmap; renderGrid(); }
-    function changeMaze(d) { if (d === 1 && curIdx === history.length - 1) generate(); curIdx = Math.max(0, Math.min(history.length - 1, curIdx + d)); load(curIdx); }
-    function resetMaze() { load(curIdx); }
-    function toggleNumbers() { showNums = !showNums; renderGrid(); }
-    function showWin() { document.getElementById('win-modal').style.display = 'flex'; document.getElementById('final-stats').innerText = `${state.path.length - 1} Steps | ${state.duration.toFixed(2)}s`; }
+    function toggleHeatmap() { 
+        state.showHeatmap = !state.showHeatmap; 
+        renderGrid(); 
+    }
+    
+    function changeMaze(d) { 
+        if (d === 1 && curIdx === history.length - 1) {
+            generate();
+        }
+        curIdx = Math.max(0, Math.min(history.length - 1, curIdx + d)); 
+        load(curIdx); 
+    }
+    
+    function resetMaze() { 
+        load(curIdx); 
+    }
+    
+    function toggleNumbers() { 
+        showNums = !showNums; 
+        renderGrid(); 
+    }
+    
+    function showWin() { 
+        document.getElementById('win-modal').style.display = 'flex'; 
+        const pathId = state.collectionOrder.join('');
+        document.getElementById('final-stats').innerText = `Path: ${pathId} | ${state.path.length - 1} Steps | ${state.duration.toFixed(2)}s`; 
+        document.getElementById('p-name').value = '';
+        document.getElementById('p-name').focus();
+    }
+
+    async function shareResult() {
+        try {
+            // Create a temporary canvas for the share image
+            const shareCanvas = document.createElement('canvas');
+            const totalSize = S * CS;
+            const padding = 20;
+            shareCanvas.width = totalSize + padding * 2;
+            shareCanvas.height = totalSize + padding * 2;
+            const ctx = shareCanvas.getContext('2d');
+
+            // Draw background
+            ctx.fillStyle = '#ffffff';
+            ctx.fillRect(0, 0, shareCanvas.width, shareCanvas.height);
+
+            // Draw border
+            ctx.strokeStyle = '#e2e8f0';
+            ctx.lineWidth = 2;
+            ctx.strokeRect(padding, padding, totalSize, totalSize);
+
+            // Draw grid background
+            ctx.fillStyle = '#f8fafc';
+            ctx.fillRect(padding, padding, totalSize, totalSize);
+
+            // Offset all drawing by padding
+            ctx.translate(padding, padding);
+
+            // Draw walls
+            ctx.lineWidth = 5;
+            ctx.strokeStyle = '#0f172a';
+            ctx.lineCap = 'round';
+            ctx.lineJoin = 'round';
+            ctx.beginPath();
+            for(let y=0; y<S; y++) {
+                for(let x=0; x<S; x++) {
+                    const cell = state.cells[y][x];
+                    if(cell.w.r && x < S-1) {
+                        ctx.moveTo((x+1)*CS, y*CS);
+                        ctx.lineTo((x+1)*CS, (y+1)*CS);
+                    }
+                    if(cell.w.b && y < S-1) {
+                        ctx.moveTo(x*CS, (y+1)*CS);
+                        ctx.lineTo((x+1)*CS, (y+1)*CS);
+                    }
+                }
+            }
+            ctx.stroke();
+
+            // Draw path
+            const pathWidth = CS * (14 / 36);
+            ctx.lineWidth = pathWidth;
+            ctx.lineCap = 'round';
+            ctx.lineJoin = 'round';
+            for (let i = 0; i < state.path.length - 1; i++) {
+                ctx.beginPath();
+                ctx.strokeStyle = state.path[i].c;
+                ctx.moveTo(state.path[i].x * CS + CS/2, state.path[i].y * CS + CS/2);
+                ctx.lineTo(state.path[i+1].x * CS + CS/2, state.path[i+1].y * CS + CS/2);
+                ctx.stroke();
+            }
+
+            // Draw final path head
+            const h = state.path[state.path.length - 1];
+            ctx.beginPath();
+            ctx.fillStyle = h.c;
+            ctx.arc(h.x * CS + CS/2, h.y * CS + CS/2, pathWidth/2, 0, Math.PI*2);
+            ctx.fill();
+
+            // Draw balls
+            for(let [n, p] of Object.entries(state.balls)) {
+                const num = parseInt(n);
+                ctx.beginPath();
+                ctx.fillStyle = colors[num-1];
+                ctx.arc(p.x * CS + CS/2, p.y * CS + CS/2, 14, 0, Math.PI*2);
+                ctx.fill();
+                
+                ctx.fillStyle = '#f8fafc';
+                ctx.font = 'bold 15px Arial, sans-serif';
+                ctx.textAlign = 'center';
+                ctx.textBaseline = 'middle';
+                ctx.fillText(n, p.x * CS + CS/2, p.y * CS + CS/2);
+            }
+
+            ctx.translate(-padding, -padding);
+
+            // Convert to blob
+            const blob = await new Promise(resolve => shareCanvas.toBlob(resolve, 'image/png'));
+            
+            const mId = history[curIdx].id;
+            const pathId = state.collectionOrder.join('');
+            const text = `Road Not Taken #${mId} - Path: ${pathId}\n${state.path.length - 1} steps in ${state.duration.toFixed(2)}s`;
+            
+            const file = new File([blob], 'road-not-taken.png', { type: 'image/png' });
+            
+            // Try Web Share API first
+            if (navigator.share && navigator.canShare) {
+                const canShareFile = navigator.canShare({ files: [file] });
+                if (canShareFile) {
+                    await navigator.share({
+                        title: 'Road Not Taken',
+                        text: text,
+                        files: [file]
+                    });
+                    return;
+                }
+            }
+            
+            // Fallback: download image and copy text
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `road-not-taken-${mId}-${pathId}.png`;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+            
+            // Try to copy text to clipboard
+            try {
+                if (navigator.clipboard && navigator.clipboard.writeText) {
+                    await navigator.clipboard.writeText(text);
+                    alert('Image downloaded! Stats copied to clipboard.');
+                } else {
+                    alert('Image downloaded!');
+                }
+            } catch (e) {
+                alert('Image downloaded!');
+            }
+        } catch (error) {
+            console.error('Share failed:', error);
+            alert('Share failed: ' + error.message);
+        }
+    }
     
     init();
 </script>
