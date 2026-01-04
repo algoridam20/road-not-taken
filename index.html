@@ -212,7 +212,7 @@
     let state = { 
         cells: [], balls: {}, player: {x:0, y:0}, collected: new Set(), collectionOrder: [], 
         path: [], gameOver: false, startTime: null, duration: 0, timerInterval: null, 
-        showHeatmap: false, isDragging: false, completionTimestamp: null
+        showHeatmap: false, isDragging: false, completionTimestamp: null, isMoving: false
     };
 
     const pathCanvas = document.getElementById('path-canvas');
@@ -343,9 +343,21 @@
 
     function renderGrid() {
         const grid = document.getElementById('grid');
-        grid.innerHTML = '';
-        const mId = history[curIdx].id;
         
+        // Only rebuild grid if it's empty (initial load or reset)
+        if (grid.children.length === 0) {
+            for(let y=0; y<S; y++) {
+                for(let x=0; x<S; x++) {
+                    const el = document.createElement('div'); 
+                    el.className = 'cell';
+                    el.dataset.x = x; 
+                    el.dataset.y = y;
+                    grid.appendChild(el);
+                }
+            }
+        }
+        
+        const mId = history[curIdx].id;
         let data = [];
         try {
             const lbData = localStorage.getItem('chroma_secure_zip_lb');
@@ -369,13 +381,16 @@
             });
         }
         
+        // Update existing cells instead of recreating
         for(let y=0; y<S; y++) {
             for(let x=0; x<S; x++) {
-                const el = document.createElement('div'); 
-                el.className = 'cell';
-                el.dataset.x = x; 
-                el.dataset.y = y;
+                const cellIndex = y * S + x;
+                const el = grid.children[cellIndex];
                 
+                // Clear previous content but keep the cell
+                el.innerHTML = '';
+                
+                // Add heatmap overlay if needed
                 if(state.gameOver && state.showHeatmap && heatMap[`${x},${y}`]) {
                     const overlay = document.createElement('div'); 
                     overlay.className = 'heatmap-overlay';
@@ -383,6 +398,7 @@
                     el.appendChild(overlay);
                 }
                 
+                // Add balls
                 for(let [n, p] of Object.entries(state.balls)) {
                     if(p.x === x && p.y === y) {
                         const b = document.createElement('div');
@@ -393,7 +409,6 @@
                         el.appendChild(b);
                     }
                 }
-                grid.appendChild(el);
             }
         }
         document.getElementById('step-count').innerText = Math.max(0, state.path.length - 1);
@@ -401,6 +416,21 @@
 
     function updatePathDisplay() {
         document.getElementById('p-seq').innerText = state.collectionOrder.join('');
+        document.getElementById('step-count').innerText = Math.max(0, state.path.length - 1);
+    }
+
+    function updateBallVisuals() {
+        // Fast update - only change ball classes without rebuilding DOM
+        for(let [n, p] of Object.entries(state.balls)) {
+            const ball = document.getElementById(`ball-${n}`);
+            if (ball) {
+                if (state.collected.has(parseInt(n))) {
+                    ball.classList.add('collected');
+                } else {
+                    ball.classList.remove('collected');
+                }
+            }
+        }
     }
 
     function drawPath() {
@@ -426,12 +456,16 @@
     }
 
     function moveTowards(nx, ny) {
-        if(state.gameOver) return;
+        if(state.gameOver || state.isMoving) return;
+        state.isMoving = true;
         
         nx = Math.max(0, Math.min(S - 1, nx));
         ny = Math.max(0, Math.min(S - 1, ny));
         
-        if (nx === state.player.x && ny === state.player.y) return;
+        if (nx === state.player.x && ny === state.player.y) {
+            state.isMoving = false;
+            return;
+        }
         
         if(!state.startTime) {
             state.startTime = Date.now();
@@ -442,10 +476,14 @@
         }
 
         const dx = nx - state.player.x, dy = ny - state.player.y;
-        if (dx !== 0 && dy !== 0) return; 
+        if (dx !== 0 && dy !== 0) {
+            state.isMoving = false;
+            return;
+        }
 
         const stepX = Math.sign(dx), stepY = Math.sign(dy);
         let curX = state.player.x, curY = state.player.y;
+        let needsRender = false;
 
         while (curX !== nx || curY !== ny) {
             let nextX = curX + stepX, nextY = curY + stepY;
@@ -468,6 +506,7 @@
                             if (idx !== -1) {
                                 state.collectionOrder.splice(idx, 1);
                             }
+                            needsRender = true;
                         }
                     }
                     curX = nextX; curY = nextY; state.player = {x: curX, y: curY}; 
@@ -491,42 +530,60 @@
                         state.gameOver = true;
                         state.completionTimestamp = Date.now();
                         clearInterval(state.timerInterval); 
+                        needsRender = true;
                         showWin();
                     } else if(num !== 1 && !state.collected.has(num)) {
                         state.collected.add(num);
                         state.collectionOrder.push(num);
                         curC = colors[num-1];
                         updatePathDisplay();
+                        needsRender = true;
                     }
                 }
             }
             state.path.push({x: curX, y: curY, c: curC});
         }
-        renderGrid(); 
+        
+        // Only update visuals if something changed
+        if (needsRender) {
+            updateBallVisuals();
+        }
+        updatePathDisplay();
         drawPath();
+        state.isMoving = false;
     }
 
     function setupInteraction() {
         const zone = document.getElementById('touch-zone');
         let lastCell = null;
+        let rafId = null;
         
         const handle = (e) => {
             if (state.gameOver) return;
-            const t = e.touches ? e.touches[0] : e;
-            const el = document.elementFromPoint(t.clientX, t.clientY);
-            if (!el) return;
-            const cell = el.closest('.cell');
-            if (cell) {
-                const x = parseInt(cell.dataset.x);
-                const y = parseInt(cell.dataset.y);
-                const cellKey = `${x},${y}`;
-                
-                // Only move if we're on a different cell
-                if (lastCell !== cellKey) {
-                    lastCell = cellKey;
-                    moveTowards(x, y);
-                }
+            
+            // Cancel any pending animation frame
+            if (rafId) {
+                cancelAnimationFrame(rafId);
             }
+            
+            // Use requestAnimationFrame to throttle updates
+            rafId = requestAnimationFrame(() => {
+                const t = e.touches ? e.touches[0] : e;
+                const el = document.elementFromPoint(t.clientX, t.clientY);
+                if (!el) return;
+                const cell = el.closest('.cell');
+                if (cell) {
+                    const x = parseInt(cell.dataset.x);
+                    const y = parseInt(cell.dataset.y);
+                    const cellKey = `${x},${y}`;
+                    
+                    // Only move if we're on a different cell
+                    if (lastCell !== cellKey) {
+                        lastCell = cellKey;
+                        moveTowards(x, y);
+                    }
+                }
+            });
         };
         
         const startDrag = (e) => {
@@ -538,6 +595,10 @@
         const endDrag = () => {
             state.isDragging = false;
             lastCell = null;
+            if (rafId) {
+                cancelAnimationFrame(rafId);
+                rafId = null;
+            }
         };
         
         zone.addEventListener('mousedown', startDrag);
@@ -715,7 +776,13 @@
     
     function toggleNumbers() { 
         showNums = !showNums; 
-        renderGrid(); 
+        // Only update the ball text content, not rebuild everything
+        for(let [n, p] of Object.entries(state.balls)) {
+            const ball = document.getElementById(`ball-${n}`);
+            if (ball) {
+                ball.innerHTML = showNums ? `<span>${n}</span>` : '';
+            }
+        }
     }
     
     function showWin() { 
